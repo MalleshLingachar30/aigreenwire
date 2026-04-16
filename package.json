@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "verify:services": "tsx scripts/verify-services.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.20.9",
@@ -28,6 +29,7 @@
     "eslint-config-next": "15.5.15",
     "postcss": "^8",
     "tailwindcss": "^3.3.0",
+    "tsx": "^4.20.6",
     "typescript": "^5"
   }
 }
