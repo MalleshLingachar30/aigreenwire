@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "The AI Green Wire",
   description:
-    "A weekly newsletter on AI in agriculture, agroforestry, forestry and ecology — by Grobet India Agrotech.",
+    "Weekly AI signals across agriculture, agroforestry, forestry, and ecology from Grobet India Agrotech.",
 };
 
 export default function RootLayout({
@@ -14,7 +14,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body className="bg-white text-slate-900 antialiased">{children}</body>
     </html>
   );
 }
