@@ -47,6 +47,7 @@ function isSubscribeSuccess(response: Response, payload: unknown): boolean {
     data.success === true ||
     status === "subscribed" ||
     status === "pending_confirmation" ||
+    status === "already_subscribed" ||
     status === "queued"
   );
 }
@@ -54,6 +55,7 @@ function isSubscribeSuccess(response: Response, payload: unknown): boolean {
 export default function HomePage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [feedbackMessage, setFeedbackMessage] = useState("");
   const [submissionState, setSubmissionState] =
     useState<SubmissionState>("idle");
 
@@ -61,6 +63,7 @@ export default function HomePage() {
     event.preventDefault();
 
     setSubmissionState("submitting");
+    setFeedbackMessage("");
 
     try {
       const response = await fetch("/api/subscribe", {
@@ -75,17 +78,28 @@ export default function HomePage() {
       });
 
       const payload = (await response.json().catch(() => null)) as unknown;
+      const message =
+        payload && typeof payload === "object" && "message" in payload
+          ? String((payload as SubscribeResponse).message ?? "")
+          : "";
 
       if (isSubscribeSuccess(response, payload)) {
         setSubmissionState("success");
+        setFeedbackMessage(
+          message || "Thanks. Please check your inbox for the confirmation step."
+        );
         setName("");
         setEmail("");
         return;
       }
 
       setSubmissionState("error");
+      setFeedbackMessage(
+        message || "Could not process your subscription. Please try again soon."
+      );
     } catch {
       setSubmissionState("error");
+      setFeedbackMessage("Could not process your subscription. Please try again soon.");
     }
   }
 
@@ -183,14 +197,10 @@ export default function HomePage() {
 
           <div className="mt-3 min-h-6 text-sm" aria-live="polite">
             {submissionState === "success" && (
-              <p className="text-emerald-800">
-                Thanks. Please check your inbox for the confirmation step.
-              </p>
+              <p className="text-emerald-800">{feedbackMessage}</p>
             )}
             {submissionState === "error" && (
-              <p className="text-amber-800">
-                Subscription is not fully enabled yet. Please try again soon.
-              </p>
+              <p className="text-amber-800">{feedbackMessage}</p>
             )}
           </div>
         </section>
