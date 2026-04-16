@@ -1,6 +1,5 @@
--- The AI Green Wire — Neon Postgres schema
--- Run this in the Neon SQL Editor (console.neon.tech → your project → SQL Editor).
--- Use the UNPOOLED / direct connection string when running via CLI.
+-- The AI Green Wire: database schema
+-- Run this entire file in the SQL Editor (console.neon.tech).
 
 -- =========================================
 -- Subscribers
@@ -10,9 +9,9 @@ create table if not exists subscribers (
   email             text not null unique,
   name              text,
   preferred_language text default 'en' check (preferred_language in ('en', 'kn', 'hi')),
-  source            text,                        -- 'landing', 'import', 'referral', etc.
+  source            text,
   subscribed_at     timestamptz default now(),
-  confirmed_at      timestamptz,                 -- null until they click the confirmation link
+  confirmed_at      timestamptz,
   confirm_token     uuid default gen_random_uuid(),
   unsubscribed_at   timestamptz,
   unsubscribe_token uuid default gen_random_uuid(),
@@ -31,12 +30,12 @@ create index if not exists idx_subscribers_email on subscribers(email);
 create table if not exists issues (
   id               uuid primary key default gen_random_uuid(),
   issue_number     integer not null unique,
-  slug             text not null unique,         -- e.g. "bharat-vistaar-and-the-global-forest-map"
-  title            text not null,                -- e.g. "Issue 01 — Bharat-VISTAAR & the Global Forest Map"
-  subject_line     text not null,                -- email subject
-  greeting_blurb   text,                         -- the "Namaste..." intro paragraph
-  stories_json     jsonb not null,               -- structured story data from Claude
-  html_rendered    text not null,                -- full rendered HTML
+  slug             text not null unique,
+  title            text not null,
+  subject_line     text not null,
+  greeting_blurb   text,
+  stories_json     jsonb not null,
+  html_rendered    text not null,
   status           text not null default 'draft'
                      check (status in ('draft', 'approved', 'sending', 'sent', 'failed')),
   generated_at     timestamptz default now(),
@@ -60,7 +59,7 @@ create table if not exists send_log (
   issue_id      uuid references issues(id) on delete cascade,
   subscriber_id uuid references subscribers(id) on delete set null,
   email         text not null,
-  resend_id     text,     -- Resend's message ID for tracking
+  resend_id     text,
   status        text not null
                   check (status in ('queued', 'sent', 'bounced', 'complained', 'failed')),
   sent_at       timestamptz default now(),
@@ -71,7 +70,7 @@ create index if not exists idx_send_log_issue  on send_log(issue_id);
 create index if not exists idx_send_log_status on send_log(status);
 
 -- =========================================
--- Helper view: active subscribers ready to receive mail
+-- View: active subscribers ready to receive mail
 -- =========================================
 create or replace view active_subscribers as
 select id, email, name, preferred_language, unsubscribe_token
