@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Build artifacts
+tsconfig.tsbuildinfo
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Vercel
+.vercel
+
+# OS
+.DS_Store
