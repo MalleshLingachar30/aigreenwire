@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { type IssueData } from "@/lib/claude";
 import { isAdminRequestAuthorized } from "@/lib/api-auth";
 import { sql } from "@/lib/db";
 import { sendEmail } from "@/lib/resend";
 import { buildAppUrl, isUuidToken, isValidEmail, normalizeEmail } from "@/lib/subscription";
-import { generateTranslatedCards, upsertWhatsAppCards } from "@/lib/whatsapp-cards";
+import { isWhatsAppAutoSendEnabled, sendWhatsAppCardsForIssue } from "@/lib/whatsapp-delivery";
+import { generateAndStoreWhatsAppCards } from "@/lib/whatsapp-cards";
 
 type ApprovePayload = {
   issueId?: unknown;
@@ -22,30 +22,6 @@ type IssueRow = {
   stories_json: unknown;
   status: string;
 };
-
-function parseIssueData(raw: unknown, issueNumber: number): IssueData {
-  let payload = raw;
-
-  if (typeof payload === "string") {
-    try {
-      payload = JSON.parse(payload);
-    } catch {
-      throw new Error("stories_json contains invalid JSON.");
-    }
-  }
-
-  if (!payload || typeof payload !== "object") {
-    throw new Error("stories_json is missing.");
-  }
-
-  const issueData = payload as Partial<IssueData>;
-  if (!Array.isArray(issueData.stories)) {
-    throw new Error("stories_json has no stories array.");
-  }
-
-  issueData.issue_number = issueNumber;
-  return issueData as IssueData;
-}
 
 function getEditorEmail(): string {
   const value = normalizeEmail(process.env.EDITOR_EMAIL ?? "");
@@ -244,20 +220,44 @@ export async function POST(request: NextRequest) {
     let cardsGenerated = false;
     let cardsCount = 0;
     let cardsError: string | null = null;
+    let whatsappAutoSent = false;
+    let whatsappDeliveryCount = 0;
+    let whatsappDeliveryError: string | null = null;
     const cardsGalleryUrl = buildAppUrl("/api/cards/gallery", {
       issue: String(issue.issue_number),
     });
 
     try {
-      const issueData = parseIssueData(issue.stories_json, Number(issue.issue_number));
-      const translatedCards = await generateTranslatedCards(issueData);
-      await upsertWhatsAppCards(issue.id, Number(issue.issue_number), translatedCards);
+      const translatedCards = await generateAndStoreWhatsAppCards(
+        issue.id,
+        Number(issue.issue_number),
+        issue.stories_json
+      );
       cardsGenerated = true;
       cardsCount = translatedCards.length;
     } catch (cardsFailure) {
       cardsError =
         cardsFailure instanceof Error ? cardsFailure.message : "WhatsApp card generation failed.";
       console.error("[cards] WhatsApp generation failure:", cardsFailure);
+    }
+
+    if (cardsGenerated && isWhatsAppAutoSendEnabled()) {
+      try {
+        const deliveries = await sendWhatsAppCardsForIssue({
+          issueId: issue.id,
+          issueNumber: Number(issue.issue_number),
+          trigger: "approve-auto",
+          mode: "template",
+        });
+        whatsappAutoSent = true;
+        whatsappDeliveryCount = deliveries.length;
+      } catch (deliveryFailure) {
+        whatsappDeliveryError =
+          deliveryFailure instanceof Error
+            ? deliveryFailure.message
+            : "WhatsApp auto-send failed.";
+        console.error("[cards] WhatsApp auto-send failure:", deliveryFailure);
+      }
     }
 
     return NextResponse.json(
@@ -280,6 +280,10 @@ export async function POST(request: NextRequest) {
           count: cardsCount,
           galleryUrl: cardsGalleryUrl,
           ...(cardsError ? { error: cardsError } : {}),
+          autoSendEnabled: isWhatsAppAutoSendEnabled(),
+          autoSent: whatsappAutoSent,
+          deliveryCount: whatsappDeliveryCount,
+          ...(whatsappDeliveryError ? { deliveryError: whatsappDeliveryError } : {}),
         },
       },
       { status: 200 }

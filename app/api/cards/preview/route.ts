@@ -1,19 +1,6 @@
 import { NextRequest } from "next/server";
-import { sql } from "@/lib/db";
 import { renderCardHTML } from "@/lib/card-renderer";
-import { isLanguage, type Language } from "@/lib/whatsapp-cards";
-
-type CardRow = {
-  issue_number: number;
-  language: Language;
-  card_number: number;
-  headline: string;
-  summary: string;
-  action_text: string;
-  tag: string | null;
-  source_url: string | null;
-  source_name: string | null;
-};
+import { getStoredWhatsAppCard, isLanguage } from "@/lib/whatsapp-cards";
 
 function parseIssueNumber(value: string | null): number | null {
   if (!value) {
@@ -50,39 +37,21 @@ export async function GET(request: NextRequest) {
     return new Response("Missing or invalid issue/lang/card query params.", { status: 400 });
   }
 
-  const rows = (await sql`
-    SELECT
-      issue_number,
-      language,
-      card_number,
-      headline,
-      summary,
-      action_text,
-      tag,
-      source_url,
-      source_name
-    FROM whatsapp_cards
-    WHERE issue_number = ${issueNumber}
-      AND language = ${languageRaw}
-      AND card_number = ${cardNumber}
-    LIMIT 1
-  `) as CardRow[];
-
-  const card = rows[0];
+  const card = await getStoredWhatsAppCard(issueNumber, languageRaw, cardNumber);
   if (!card) {
     return new Response("Card not found.", { status: 404 });
   }
 
   const html = renderCardHTML({
-    issueNumber: Number(card.issue_number),
+    issueNumber: card.issueNumber,
     language: card.language,
-    cardNumber: card.card_number as 1 | 2 | 3,
-    tag: card.tag ?? "",
+    cardNumber: card.cardNumber,
+    tag: card.tag,
     headline: card.headline,
     summary: card.summary,
-    actionText: card.action_text,
-    sourceUrl: card.source_url,
-    sourceName: card.source_name,
+    actionText: card.actionText,
+    sourceUrl: card.sourceUrl,
+    sourceName: card.sourceName,
   });
 
   return new Response(html, {

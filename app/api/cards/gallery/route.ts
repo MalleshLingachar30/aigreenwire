@@ -1,13 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdminRequestAuthorized } from "@/lib/api-auth";
-import { sql } from "@/lib/db";
-import { LANGUAGE_CONFIG, type Language } from "@/lib/whatsapp-cards";
-
-type CardRow = {
-  issue_number: number;
-  language: Language;
-  card_number: number;
-};
+import { LANGUAGE_CONFIG, listStoredWhatsAppCards, type Language } from "@/lib/whatsapp-cards";
 
 function parseIssueNumber(value: string | null): number | null {
   if (!value) {
@@ -47,17 +40,8 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const rows = (await sql`
-    SELECT
-      issue_number,
-      language,
-      card_number
-    FROM whatsapp_cards
-    WHERE issue_number = ${issueNumber}
-    ORDER BY language, card_number
-  `) as CardRow[];
-
-  if (rows.length === 0) {
+  const cards = await listStoredWhatsAppCards(issueNumber);
+  if (cards.length === 0) {
     return new Response("No WhatsApp cards found for this issue.", { status: 404 });
   }
 
@@ -68,10 +52,10 @@ export async function GET(request: NextRequest) {
     groups.set(language, []);
   }
 
-  for (const row of rows) {
-    const cards = groups.get(row.language);
-    if (cards) {
-      cards.push(Number(row.card_number));
+  for (const card of cards) {
+    const cardNumbers = groups.get(card.language);
+    if (cardNumbers) {
+      cardNumbers.push(card.cardNumber);
     }
   }
 

@@ -1,5 +1,6 @@
 import { anthropic, type IssueData, type Story } from "@/lib/claude";
 import { sql } from "@/lib/db";
+import { buildAppUrl } from "@/lib/subscription";
 
 export type Language = "kn" | "te" | "ta" | "hi";
 
@@ -84,8 +85,22 @@ export type TranslatedCard = {
   sourceName: string | null;
 };
 
+export type StoredWhatsAppCard = TranslatedCard & {
+  issueId: string;
+  issueNumber: number;
+  createdAt: string | null;
+};
+
 function sanitizeLine(value: string): string {
   return value.replace(/\s+/g, " ").trim();
+}
+
+function parseCardNumber(value: number): 1 | 2 | 3 {
+  if (value !== 1 && value !== 2 && value !== 3) {
+    throw new Error(`Invalid WhatsApp card number: ${value}`);
+  }
+
+  return value;
 }
 
 function getFirstParagraph(story: Story): string {
@@ -99,6 +114,30 @@ function getActionLine(story: Story): string {
   }
 
   return "Read the full update and discuss practical next steps with your local farming network.";
+}
+
+export function parseStoredIssueData(raw: unknown, issueNumber: number): IssueData {
+  let payload = raw;
+
+  if (typeof payload === "string") {
+    try {
+      payload = JSON.parse(payload);
+    } catch {
+      throw new Error("stories_json contains invalid JSON.");
+    }
+  }
+
+  if (!payload || typeof payload !== "object") {
+    throw new Error("stories_json is missing.");
+  }
+
+  const issueData = payload as Partial<IssueData>;
+  if (!Array.isArray(issueData.stories)) {
+    throw new Error("stories_json has no stories array.");
+  }
+
+  issueData.issue_number = issueNumber;
+  return issueData as IssueData;
 }
 
 export function isLanguage(value: string | null): value is Language {
@@ -401,6 +440,152 @@ export async function generateTranslatedCards(data: IssueData): Promise<Translat
   );
 
   return translatedByLanguage.flat();
+}
+
+export async function generateAndStoreWhatsAppCards(
+  issueId: string,
+  issueNumber: number,
+  storiesJson: unknown
+): Promise<TranslatedCard[]> {
+  const issueData = parseStoredIssueData(storiesJson, issueNumber);
+  const cards = await generateTranslatedCards(issueData);
+  await upsertWhatsAppCards(issueId, issueNumber, cards);
+  return cards;
+}
+
+export function buildCardPreviewUrl(
+  issueNumber: number,
+  language: Language,
+  cardNumber: 1 | 2 | 3
+): string {
+  return buildAppUrl("/api/cards/preview", {
+    issue: String(issueNumber),
+    lang: language,
+    card: String(cardNumber),
+  });
+}
+
+export function buildCardImageUrl(
+  issueNumber: number,
+  language: Language,
+  cardNumber: 1 | 2 | 3
+): string {
+  return buildAppUrl("/api/cards/image", {
+    issue: String(issueNumber),
+    lang: language,
+    card: String(cardNumber),
+  });
+}
+
+export function buildCardImagePath(
+  issueNumber: number,
+  language: Language,
+  cardNumber: 1 | 2 | 3
+): string {
+  return `/api/cards/image?issue=${issueNumber}&lang=${language}&card=${cardNumber}`;
+}
+
+export async function listStoredWhatsAppCards(issueNumber: number): Promise<StoredWhatsAppCard[]> {
+  const rows = (await sql`
+    SELECT
+      issue_id::text AS issue_id,
+      issue_number,
+      language,
+      card_number,
+      headline,
+      summary,
+      action_text,
+      tag,
+      source_url,
+      source_name,
+      created_at::text AS created_at
+    FROM whatsapp_cards
+    WHERE issue_number = ${issueNumber}
+    ORDER BY language, card_number
+  `) as Array<{
+    issue_id: string;
+    issue_number: number;
+    language: Language;
+    card_number: number;
+    headline: string;
+    summary: string;
+    action_text: string;
+    tag: string | null;
+    source_url: string | null;
+    source_name: string | null;
+    created_at: string | null;
+  }>;
+
+  return rows.map((row) => ({
+    issueId: row.issue_id,
+    issueNumber: Number(row.issue_number),
+    language: row.language,
+    cardNumber: parseCardNumber(Number(row.card_number)),
+    tag: row.tag ?? "",
+    headline: row.headline,
+    summary: row.summary,
+    actionText: row.action_text,
+    sourceUrl: row.source_url,
+    sourceName: row.source_name,
+    createdAt: row.created_at,
+  }));
+}
+
+export async function getStoredWhatsAppCard(
+  issueNumber: number,
+  language: Language,
+  cardNumber: 1 | 2 | 3
+): Promise<StoredWhatsAppCard | null> {
+  const rows = (await sql`
+    SELECT
+      issue_id::text AS issue_id,
+      issue_number,
+      language,
+      card_number,
+      headline,
+      summary,
+      action_text,
+      tag,
+      source_url,
+      source_name,
+      created_at::text AS created_at
+    FROM whatsapp_cards
+    WHERE issue_number = ${issueNumber}
+      AND language = ${language}
+      AND card_number = ${cardNumber}
+    LIMIT 1
+  `) as Array<{
+    issue_id: string;
+    issue_number: number;
+    language: Language;
+    card_number: number;
+    headline: string;
+    summary: string;
+    action_text: string;
+    tag: string | null;
+    source_url: string | null;
+    source_name: string | null;
+    created_at: string | null;
+  }>;
+
+  const row = rows[0];
+  if (!row) {
+    return null;
+  }
+
+  return {
+    issueId: row.issue_id,
+    issueNumber: Number(row.issue_number),
+    language: row.language,
+    cardNumber: parseCardNumber(Number(row.card_number)),
+    tag: row.tag ?? "",
+    headline: row.headline,
+    summary: row.summary,
+    actionText: row.action_text,
+    sourceUrl: row.source_url,
+    sourceName: row.source_name,
+    createdAt: row.created_at,
+  };
 }
 
 export async function upsertWhatsAppCards(

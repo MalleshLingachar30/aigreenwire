@@ -92,6 +92,38 @@ create index if not exists idx_whatsapp_cards_issue on whatsapp_cards(issue_numb
 create index if not exists idx_whatsapp_cards_lang on whatsapp_cards(language);
 
 -- =========================================
+-- WhatsApp delivery log (per-card, per-recipient)
+-- =========================================
+create table if not exists whatsapp_card_deliveries (
+  id                   uuid primary key default gen_random_uuid(),
+  issue_id             uuid references issues(id) on delete cascade,
+  issue_number         integer not null,
+  language             text not null check (language in ('kn', 'te', 'ta', 'hi')),
+  card_number          integer not null check (card_number between 1 and 3),
+  recipient            text not null,
+  recipient_label      text,
+  provider             text not null default 'twilio',
+  provider_message_sid text,
+  status               text not null,
+  mode                 text not null check (mode in ('template', 'session')),
+  trigger              text not null check (trigger in ('approve-auto', 'manual')),
+  media_url            text not null,
+  error_code           text,
+  error_message        text,
+  created_at           timestamptz default now(),
+  updated_at           timestamptz default now()
+);
+
+create index if not exists idx_whatsapp_card_deliveries_issue
+  on whatsapp_card_deliveries(issue_number, language, card_number);
+
+create index if not exists idx_whatsapp_card_deliveries_sid
+  on whatsapp_card_deliveries(provider_message_sid);
+
+create index if not exists idx_whatsapp_card_deliveries_status
+  on whatsapp_card_deliveries(status);
+
+-- =========================================
 -- View: active subscribers ready to receive mail
 -- =========================================
 create or replace view active_subscribers as

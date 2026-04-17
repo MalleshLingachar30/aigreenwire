@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { type IssueData } from "@/lib/claude";
 import { isAdminRequestAuthorized } from "@/lib/api-auth";
 import { sql } from "@/lib/db";
 import {
-  generateTranslatedCards,
-  upsertWhatsAppCards,
+  buildCardImageUrl,
+  buildCardPreviewUrl,
+  generateAndStoreWhatsAppCards,
   type TranslatedCard,
 } from "@/lib/whatsapp-cards";
 import { buildAppUrl, isUuidToken } from "@/lib/subscription";
@@ -16,29 +16,6 @@ type IssueRow = {
   issue_number: number;
   stories_json: unknown;
 };
-
-function parseIssueData(raw: unknown): IssueData {
-  let value = raw;
-
-  if (typeof value === "string") {
-    try {
-      value = JSON.parse(value);
-    } catch {
-      throw new Error("Issue stories_json is invalid JSON.");
-    }
-  }
-
-  if (!value || typeof value !== "object") {
-    throw new Error("Issue stories_json payload is missing.");
-  }
-
-  const data = value as Partial<IssueData>;
-  if (!Array.isArray(data.stories)) {
-    throw new Error("Issue stories_json has no stories array.");
-  }
-
-  return value as IssueData;
-}
 
 async function findIssueById(issueId: string): Promise<IssueRow | null> {
   const rows = (await sql`
@@ -56,11 +33,13 @@ async function findIssueById(issueId: string): Promise<IssueRow | null> {
 
 function buildPreviewUrls(issueNumber: number, cards: TranslatedCard[]) {
   return cards.map((card) =>
-    buildAppUrl("/api/cards/preview", {
-      issue: String(issueNumber),
-      lang: card.language,
-      card: String(card.cardNumber),
-    })
+    buildCardPreviewUrl(issueNumber, card.language, card.cardNumber)
+  );
+}
+
+function buildImageUrls(issueNumber: number, cards: TranslatedCard[]) {
+  return cards.map((card) =>
+    buildCardImageUrl(issueNumber, card.language, card.cardNumber)
   );
 }
 
@@ -86,11 +65,11 @@ async function handleGenerate(request: NextRequest) {
   }
 
   try {
-    const issueData = parseIssueData(issue.stories_json);
-    issueData.issue_number = Number(issue.issue_number);
-
-    const cards = await generateTranslatedCards(issueData);
-    await upsertWhatsAppCards(issue.id, Number(issue.issue_number), cards);
+    const cards = await generateAndStoreWhatsAppCards(
+      issue.id,
+      Number(issue.issue_number),
+      issue.stories_json
+    );
 
     const galleryUrl = buildAppUrl("/api/cards/gallery", {
       issue: String(issue.issue_number),
@@ -105,6 +84,7 @@ async function handleGenerate(request: NextRequest) {
         },
         cardsGenerated: cards.length,
         previewUrls: buildPreviewUrls(Number(issue.issue_number), cards),
+        imageUrls: buildImageUrls(Number(issue.issue_number), cards),
         galleryUrl,
       },
       { status: 200 }
