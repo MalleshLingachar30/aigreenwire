@@ -2,19 +2,22 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useEffect } from 'react';
 
 const LANDING_LOGO_URL = '/assets/grobet-logo.png';
 
 export default function LandingPage() {
-  const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
   const [showLandingLogo, setShowLandingLogo] = useState(true);
+  const [archiveLocked, setArchiveLocked] = useState(false);
 
-  const archiveLocked = searchParams.get('archive') === 'locked';
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setArchiveLocked(params.get('archive') === 'locked');
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
