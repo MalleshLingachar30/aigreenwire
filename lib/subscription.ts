@@ -73,6 +73,27 @@ export function buildConfirmEmailHtml(
   ].join("");
 }
 
+export function buildWelcomeEmailHtml(
+  archiveUrl: string,
+  unsubscribeUrl: string,
+  name?: string | null
+): string {
+  const greeting = name ? `Hi ${escapeHtml(name)},` : "Hi,";
+
+  return [
+    `<p>${greeting}</p>`,
+    "<p>Welcome to <strong>The AI Green Wire</strong> — you're all set!</p>",
+    "<p>Every Monday morning you'll receive a concise briefing covering the week's most important developments in AI applied to farming, forestry and ecology, with special attention to India and Indian growers.</p>",
+    "<p>In the meantime, you can browse every past issue in the subscriber archive:</p>",
+    `<p><a href=\"${archiveUrl}\" style=\"display:inline-block;padding:10px 16px;background:#047857;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;\">Browse the archive</a></p>`,
+    `<p>If the button does not work, copy this URL into your browser:<br/><a href=\"${archiveUrl}\">${archiveUrl}</a></p>`,
+    "<p>Thank you for joining. I'm glad to have you here.</p>",
+    "<p>— Mallesh Lingachar, Editor, The AI Green Wire</p>",
+    `<hr style=\"border:none;border-top:1px solid #e5e7eb;margin:24px 0 12px;\"/>`,
+    `<p style=\"font-size:12px;color:#888;\"><a href=\"${unsubscribeUrl}\" style=\"color:#888;\">Unsubscribe</a></p>`,
+  ].join("");
+}
+
 export function buildResubscribeReminderEmailHtml(
   resubscribeUrl: string,
   unsubscribeUrl: string,

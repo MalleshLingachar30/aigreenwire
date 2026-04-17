@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { setArchiveAccessCookie } from "@/lib/archive-access";
 import { sql } from "@/lib/db";
-import { buildAppUrl, isUuidToken } from "@/lib/subscription";
+import { sendEmail } from "@/lib/resend";
+import { buildAppUrl, buildWelcomeEmailHtml, isUuidToken } from "@/lib/subscription";
 
 type SubscriberRow = {
   id: string;
+  email: string;
+  name: string | null;
   confirmed_at: string | null;
   unsubscribed_at: string | null;
   unsubscribe_token: string;
@@ -45,6 +48,8 @@ export async function GET(request: NextRequest) {
     const rows = (await sql`
       SELECT
         id::text AS id,
+        email,
+        name,
         confirmed_at::text AS confirmed_at,
         unsubscribed_at::text AS unsubscribed_at,
         unsubscribe_token::text AS unsubscribe_token
@@ -77,6 +82,24 @@ export async function GET(request: NextRequest) {
 
     const unsubscribeToken =
       updatedRows[0]?.unsubscribe_token ?? subscriber.unsubscribe_token;
+
+    // Send welcome email (fire-and-forget — don't block confirmation).
+    const archiveUrl = buildAppUrl("/issues", { token: unsubscribeToken });
+    const unsubscribeUrl = buildAppUrl("/api/unsubscribe", {
+      token: unsubscribeToken,
+    });
+
+    sendEmail({
+      to: subscriber.email,
+      subject: "Welcome to The AI Green Wire",
+      html: buildWelcomeEmailHtml(archiveUrl, unsubscribeUrl, subscriber.name),
+      tags: [
+        { name: "flow", value: "double-opt-in" },
+        { name: "action", value: "welcome" },
+      ],
+    }).catch(() => {
+      // Swallow — confirmation itself already succeeded.
+    });
 
     return redirectToUnsubscribe("confirmed", {
       token: unsubscribeToken,

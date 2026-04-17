@@ -11,13 +11,13 @@ function copyForStatus(status: string) {
       return {
         title: "Subscription confirmed",
         message:
-          "Your email is now confirmed for The AI Green Wire. If you ever want to stop receiving it, use the unsubscribe action below.",
+          "Your email is now confirmed for The AI Green Wire. You can browse every past issue in the subscriber archive below.",
       };
     case "already-confirmed":
       return {
         title: "Already confirmed",
         message:
-          "This email is already confirmed. If you want to stop receiving future issues, you can unsubscribe below.",
+          "This email is already confirmed. You can browse every past issue in the subscriber archive below.",
       };
     case "unsubscribed":
       return {
@@ -58,36 +58,45 @@ export default async function UnsubscribePage({
   const unsubscribeHref =
     token.length > 0 ? `/api/unsubscribe?token=${encodeURIComponent(token)}` : null;
 
+  const archiveHref =
+    token.length > 0 ? `/issues?token=${encodeURIComponent(token)}` : "/issues";
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-green-50 px-6 py-12">
       <div className="w-full max-w-xl rounded-2xl border border-green-100 bg-white p-8 shadow-sm">
         <h1 className="text-3xl font-semibold text-green-900">{title}</h1>
         <p className="mt-3 text-base leading-relaxed text-green-800">{message}</p>
 
-        {unsubscribeHref && (status === "confirmed" || status === "already-confirmed") && (
-          <Link
-            href={unsubscribeHref}
-            className="mt-6 inline-flex rounded-lg bg-green-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-900"
-          >
-            Unsubscribe now
-          </Link>
-        )}
-
         {(status === "confirmed" || status === "already-confirmed") && (
-          <Link
-            href="/issues"
-            className="ml-3 mt-6 inline-flex rounded-lg border border-green-300 px-4 py-2 text-sm font-semibold text-green-800 transition hover:bg-green-100"
-          >
-            Browse subscriber archive
-          </Link>
+          <div className="mt-6">
+            <Link
+              href={archiveHref}
+              className="inline-flex rounded-lg bg-green-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-900"
+            >
+              Browse subscriber archive
+            </Link>
+          </div>
         )}
 
-        <Link
-          href="/"
-          className="mt-6 inline-flex rounded-lg border border-green-300 px-4 py-2 text-sm font-semibold text-green-800 transition hover:bg-green-100"
-        >
-          Back to homepage
-        </Link>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <Link
+            href="/"
+            className="inline-flex rounded-lg border border-green-300 px-4 py-2 text-sm font-semibold text-green-800 transition hover:bg-green-100"
+          >
+            Back to homepage
+          </Link>
+        </div>
+
+        {unsubscribeHref && (status === "confirmed" || status === "already-confirmed") && (
+          <footer className="mt-8 border-t border-green-100 pt-4">
+            <Link
+              href={unsubscribeHref}
+              className="text-xs text-green-600 underline transition hover:text-green-800"
+            >
+              Unsubscribe from The AI Green Wire
+            </Link>
+          </footer>
+        )}
       </div>
     </main>
   );
