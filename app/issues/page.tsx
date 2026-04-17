@@ -4,8 +4,13 @@ import {
   formatIssueNumber,
   listArchiveIssues,
 } from "@/lib/archive";
+import { requireArchiveAccess } from "@/lib/archive-access";
 
 export const dynamic = "force-dynamic";
+
+type IssuesPageProps = {
+  searchParams: Promise<{ token?: string | string[] }>;
+};
 
 function previewGreeting(text: string, maxLength = 180): string {
   const compact = text.replace(/\s+/g, " ").trim();
@@ -16,7 +21,13 @@ function previewGreeting(text: string, maxLength = 180): string {
   return `${compact.slice(0, maxLength - 1).trimEnd()}…`;
 }
 
-export default async function IssuesPage() {
+export default async function IssuesPage({ searchParams }: IssuesPageProps) {
+  const resolvedSearchParams = await searchParams;
+  const queryToken = Array.isArray(resolvedSearchParams.token)
+    ? resolvedSearchParams.token[0]
+    : resolvedSearchParams.token;
+  await requireArchiveAccess(queryToken ?? null);
+
   const issues = await listArchiveIssues(50);
 
   return (

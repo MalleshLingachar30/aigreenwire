@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { requireArchiveAccess } from "@/lib/archive-access";
 import {
   formatArchiveDate,
   getArchiveIssueBySlug,
@@ -9,9 +10,16 @@ export const dynamic = "force-dynamic";
 
 type IssuePageProps = {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ token?: string | string[] }>;
 };
 
-export default async function IssuePage({ params }: IssuePageProps) {
+export default async function IssuePage({ params, searchParams }: IssuePageProps) {
+  const resolvedSearchParams = await searchParams;
+  const queryToken = Array.isArray(resolvedSearchParams.token)
+    ? resolvedSearchParams.token[0]
+    : resolvedSearchParams.token;
+  await requireArchiveAccess(queryToken ?? null);
+
   const { slug } = await params;
   const issue = await getArchiveIssueBySlug(slug);
 
