@@ -30,7 +30,7 @@ export function isUuidToken(token: string | null): token is string {
 }
 
 export function getAppUrl(): string {
-  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim();
 
   if (!configured) {
     return DEFAULT_APP_URL;

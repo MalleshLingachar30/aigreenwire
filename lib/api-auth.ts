@@ -14,9 +14,19 @@ function getBearerToken(request: NextRequest): string | null {
   return token.trim();
 }
 
-function getRequiredSecret(envName: "CRON_SECRET" | "ADMIN_SECRET"): string | null {
+function getRequiredSecret(envName: "CRON_SECRET"): string | null {
   const value = process.env[envName]?.trim();
   return value ? value : null;
+}
+
+function getAdminPassword(): string | null {
+  const value = process.env.ADMIN_PASSWORD;
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
 }
 
 export function isCronRequestAuthorized(request: NextRequest): boolean {
@@ -33,14 +43,14 @@ export function isCronRequestAuthorized(request: NextRequest): boolean {
 }
 
 export function isAdminRequestAuthorized(request: NextRequest): boolean {
-  const secret = getRequiredSecret("ADMIN_SECRET");
-  if (!secret) {
+  const password = getAdminPassword();
+  if (!password) {
     return false;
   }
 
   const bearer = getBearerToken(request);
-  const headerSecret = request.headers.get("x-admin-secret")?.trim() ?? null;
-  const querySecret = request.nextUrl.searchParams.get("secret")?.trim() ?? null;
+  const headerPassword = request.headers.get("x-admin-password")?.trim() ?? null;
+  const queryPassword = request.nextUrl.searchParams.get("password");
 
-  return bearer === secret || headerSecret === secret || querySecret === secret;
+  return bearer === password || headerPassword === password || queryPassword === password;
 }

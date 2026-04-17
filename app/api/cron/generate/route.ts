@@ -44,6 +44,24 @@ function getEditorEmail(): string {
   return email;
 }
 
+function getSiteUrl(): string {
+  const raw = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (!raw) {
+    throw new Error("NEXT_PUBLIC_SITE_URL is missing.");
+  }
+
+  return raw.replace(/\/+$/, "");
+}
+
+function getAdminPassword(): string {
+  const value = process.env.ADMIN_PASSWORD;
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error("ADMIN_PASSWORD is missing.");
+  }
+
+  return value;
+}
+
 function slugify(input: string): string {
   const value = input
     .toLowerCase()
@@ -182,15 +200,21 @@ function escapeHtml(value: string): string {
 }
 
 function buildPreviewEnvelopeHtml(draft: InsertedDraft, htmlRendered: string): string {
-  const approveEndpoint = buildAppUrl("/api/admin/approve");
+  const siteUrl = getSiteUrl();
+  const encodedPassword = encodeURIComponent(getAdminPassword());
+  const previewUrl = `${siteUrl}/api/admin/preview?id=${draft.id}&password=${encodedPassword}`;
+  const approveUrl = `${siteUrl}/api/admin/approve?id=${draft.id}&password=${encodedPassword}`;
 
   return [
     '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#0f172a;line-height:1.5;">',
     `<p><strong>Preview ready:</strong> Issue ${String(draft.issueNumber).padStart(2, "0")} (${escapeHtml(draft.slug)})</p>`,
-    '<p>When ready, approve and send-to-self with:</p>',
-    `<pre style="white-space:pre-wrap;background:#f8fafc;border:1px solid #e2e8f0;padding:12px;border-radius:8px;">curl -X POST "${escapeHtml(
-      approveEndpoint
-    )}" \\\n  -H "Authorization: Bearer &lt;ADMIN_SECRET&gt;" \\\n  -H "Content-Type: application/json" \\\n  -d '{"issueId":"${escapeHtml(draft.id)}"}'</pre>`,
+    "<p>Review the draft and approve when ready:</p>",
+    `<p style="margin:14px 0 16px;">
+      <a href="${escapeHtml(previewUrl)}" style="display:inline-block;padding:10px 16px;background:#1d4ed8;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;margin-right:8px;">Preview Draft</a>
+      <a href="${escapeHtml(approveUrl)}" style="display:inline-block;padding:10px 16px;background:#166534;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;">Approve &amp; Send</a>
+    </p>`,
+    `<p style="margin:0 0 6px;"><strong>Preview URL:</strong> <a href="${escapeHtml(previewUrl)}">${escapeHtml(previewUrl)}</a></p>`,
+    `<p style="margin:0;"><strong>Approve URL:</strong> <a href="${escapeHtml(approveUrl)}">${escapeHtml(approveUrl)}</a></p>`,
     '</div>',
     '<hr style="margin:20px 0;border:none;border-top:1px solid #e2e8f0;" />',
     htmlRendered,
