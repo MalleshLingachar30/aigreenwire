@@ -35,7 +35,12 @@ Your task: use the web_search tool to find the most important developments from 
 2. Agroforestry, forestry, and carbon/biodiversity AI developments (global but India-relevant)
 3. Opportunities for Indian students and researchers (PhDs, postdocs, challenges)
 
-You should search for at least 6 different queries across these topics. Prefer stories with:
+Hard budget rule: this run must stay compact to avoid rate limits.
+- Use web_search at most 3 times total
+- Prefer one strong source per story (max 2 only when essential)
+- Keep every sentence factual and concise
+
+Prefer stories with:
 - Named institutions (government ministries, universities, WEF, FAO, Google Research, etc.)
 - Concrete numbers (farmers reached, yield gains, funding amounts, accuracy metrics)
 - Working URLs from authoritative sources (PIB, Reuters, FAO, WEF, ICAR, Nature, research university sites)
@@ -45,17 +50,17 @@ You should search for at least 6 different queries across these topics. Prefer s
 {
   "issue_number": <the number passed in>,
   "subject_line": "The AI Green Wire · Issue NN · <short headline of the week>",
-  "greeting_blurb": "<4-5 sentences starting with 'Namaste.' summarising the week's 2-3 biggest stories and why they matter to Indian growers>",
+  "greeting_blurb": "<exactly 3 short sentences starting with 'Namaste.' summarising the week's top signals for Indian growers>",
   "stories": [
     {
       "section": "india" | "forestry" | "students",
       "tag": "<short uppercase label, 1-3 words>",
       "headline": "<one-line headline>",
       "paragraphs": [
-        "<paragraph 1: what happened, 3-5 sentences>",
-        "<paragraph 2: context and implications for Indian growers/foresters, 3-5 sentences>"
+        "<paragraph 1: what happened, exactly 2 short sentences>",
+        "<paragraph 2: implications for Indian growers/foresters, exactly 2 short sentences>"
       ],
-      "action": "<optional 'What you can do:' one-sentence action, or null>",
+      "action": "<optional 'What you can do:' one short sentence (max 18 words), or null>",
       "sources": [
         { "name": "<publication name>", "url": "<full URL>" }
       ]
@@ -65,8 +70,8 @@ You should search for at least 6 different queries across these topics. Prefer s
     { "value": "<e.g. $8.9B>", "label": "<short label>", "source_name": "<pub>", "source_url": "<url>" }
   ],
   "field_note": [
-    "<paragraph 1: 3-5 sentences on what the week's developments mean specifically for sandalwood growers or Indian agroforestry growers>",
-    "<paragraph 2: 2-4 sentences of concrete advice on what the reader should do this month>"
+    "<paragraph 1: exactly 2 short sentences on what this means for sandalwood or Indian agroforestry growers>",
+    "<paragraph 2: exactly 2 short sentences of concrete advice for this month>"
   ]
 }
 
@@ -75,6 +80,7 @@ Requirements:
 - Exactly 4 stories in "forestry" section
 - Exactly 2 stories in "students" section
 - Exactly 4 stats
+- Keep the full JSON response compact; avoid long paragraphs
 - Every story MUST have at least one source with a real, working URL
 - Every source URL must be a full URL starting with https://
 - No made-up URLs — only cite sources you actually found via web_search
@@ -253,7 +259,8 @@ function normalizeIssueData(input: unknown, issueNumber: number): IssueData {
 export async function generateIssue(issueNumber: number): Promise<IssueData> {
   const response = await anthropic.messages.create({
     model: "claude-sonnet-4-20250514",
-    max_tokens: 8000,
+    // Keep requested output tokens deliberately low to stay under TPM limits.
+    max_tokens: 3200,
     tools: [
       {
         type: "web_search_20250305",
