@@ -9,16 +9,25 @@ const UUID_PATTERN =
 /**
  * Middleware that handles archive access via query-string token.
  *
- * This middleware persists a valid `?token=` as a cookie for subsequent
- * archive navigation after first successful entry.
+ * On a valid `?token=`, the middleware forwards the token via request header
+ * and persists it as a cookie for subsequent archive navigations.
  */
 export function middleware(request: NextRequest) {
   const token = request.nextUrl.searchParams.get("token")?.trim() ?? "";
-  const response = NextResponse.next();
+  const requestHeaders = new Headers(request.headers);
+  const hasValidToken = UUID_PATTERN.test(token);
+
+  if (hasValidToken) {
+    requestHeaders.set("x-archive-token", token);
+  }
+
+  const response = NextResponse.next({
+    request: { headers: requestHeaders },
+  });
 
   // Persist a valid token for later archive navigations that do not include
   // a query token.
-  if (UUID_PATTERN.test(token)) {
+  if (hasValidToken) {
     response.cookies.set({
       name: ARCHIVE_ACCESS_COOKIE,
       value: token,

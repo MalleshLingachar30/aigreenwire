@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import type { NextResponse } from "next/server";
 import { resolveArchiveAccessToken } from "@/lib/archive-token";
 import { sql } from "@/lib/db";
@@ -17,9 +17,16 @@ type ArchiveAccessRow = {
 async function resolveToken(
   queryToken: string | null | undefined
 ): Promise<string | null> {
+  const headerStore = await headers();
+  const headerToken = headerStore.get("x-archive-token");
   const cookieStore = await cookies();
   const cookieToken = cookieStore.get(ARCHIVE_ACCESS_COOKIE)?.value ?? null;
-  return resolveArchiveAccessToken(queryToken, cookieToken);
+
+  return resolveArchiveAccessToken({
+    headerToken,
+    queryToken,
+    cookieToken,
+  });
 }
 
 export async function requireArchiveAccess(

@@ -1,15 +1,25 @@
 import { isUuidToken } from "@/lib/subscription";
 
+type ArchiveAccessTokenSources = {
+  headerToken?: string | null;
+  queryToken?: string | null;
+  cookieToken?: string | null;
+};
+
 export function resolveArchiveAccessToken(
-  queryToken: string | null | undefined,
-  cookieToken: string | null | undefined
+  sources: ArchiveAccessTokenSources
 ): string | null {
-  const normalizedQueryToken = queryToken?.trim() ?? null;
+  const normalizedHeaderToken = sources.headerToken?.trim() ?? null;
+  if (isUuidToken(normalizedHeaderToken)) {
+    return normalizedHeaderToken;
+  }
+
+  const normalizedQueryToken = sources.queryToken?.trim() ?? null;
   if (isUuidToken(normalizedQueryToken)) {
     return normalizedQueryToken;
   }
 
-  const normalizedCookieToken = cookieToken?.trim() ?? null;
+  const normalizedCookieToken = sources.cookieToken?.trim() ?? null;
   if (isUuidToken(normalizedCookieToken)) {
     return normalizedCookieToken;
   }
