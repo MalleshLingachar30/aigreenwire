@@ -1,210 +1,244 @@
-"use client";
+'use client';
 
-import { FormEvent, useState } from "react";
+import { useState } from 'react';
+import Link from 'next/link';
 
-type SubmissionState = "idle" | "submitting" | "success" | "error";
+const LANDING_LOGO_URL = process.env.NEXT_PUBLIC_GROBET_LOGO_URL || '';
 
-type SubscribeResponse = {
-  ok?: boolean;
-  success?: boolean;
-  status?: string;
-  message?: string;
-};
+export default function LandingPage() {
+  const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [message, setMessage] = useState('');
 
-const PILLARS = [
-  {
-    title: "Signal Over Hype",
-    detail:
-      "Practical AI use cases in agriculture, forestry, and ecology with clear implications for real operators.",
-  },
-  {
-    title: "Weekly Curation",
-    detail:
-      "One concise issue each week with trend snapshots, field examples, and short analysis you can act on.",
-  },
-  {
-    title: "Operator Perspective",
-    detail:
-      "Written for teams building on the ground, not for speculative headline chasing.",
-  },
-];
-
-function isSubscribeSuccess(response: Response, payload: unknown): boolean {
-  if (!response.ok || !payload || typeof payload !== "object") {
-    return false;
-  }
-
-  const data = payload as SubscribeResponse;
-  const message = data.message?.toLowerCase() ?? "";
-  const status = data.status?.toLowerCase() ?? "";
-
-  if (message.includes("placeholder")) {
-    return false;
-  }
-
-  return (
-    data.ok === true ||
-    data.success === true ||
-    status === "subscribed" ||
-    status === "pending_confirmation" ||
-    status === "already_subscribed" ||
-    status === "queued"
-  );
-}
-
-export default function HomePage() {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [feedbackMessage, setFeedbackMessage] = useState("");
-  const [submissionState, setSubmissionState] =
-    useState<SubmissionState>("idle");
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    setSubmissionState("submitting");
-    setFeedbackMessage("");
-
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setStatus('loading');
     try {
-      const response = await fetch("/api/subscribe", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: name.trim() || undefined,
-          email: email.trim(),
-        }),
+      const res = await fetch('/api/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, name })
       });
-
-      const payload = (await response.json().catch(() => null)) as unknown;
-      const message =
-        payload && typeof payload === "object" && "message" in payload
-          ? String((payload as SubscribeResponse).message ?? "")
-          : "";
-
-      if (isSubscribeSuccess(response, payload)) {
-        setSubmissionState("success");
-        setFeedbackMessage(
-          message || "Thanks. Please check your inbox for the confirmation step."
-        );
-        setName("");
-        setEmail("");
-        return;
+      const data = await res.json();
+      if (res.ok) {
+        setStatus('success');
+        setMessage(data.message || 'Check your inbox to confirm.');
+        setEmail('');
+        setName('');
+      } else {
+        setStatus('error');
+        setMessage(data.error || 'Something went wrong.');
       }
-
-      setSubmissionState("error");
-      setFeedbackMessage(
-        message || "Could not process your subscription. Please try again soon."
-      );
     } catch {
-      setSubmissionState("error");
-      setFeedbackMessage("Could not process your subscription. Please try again soon.");
+      setStatus('error');
+      setMessage('Network error. Please try again.');
     }
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-emerald-50 via-lime-50 to-white text-slate-900">
-      <section className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 pb-16 pt-14 md:px-10 md:pt-20">
-        <div className="space-y-5">
-          <p className="inline-flex rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">
-            Weekly Briefing
-          </p>
-          <h1 className="max-w-4xl text-4xl font-semibold leading-tight text-emerald-950 md:text-6xl">
-            The AI Green Wire
-          </h1>
-          <p className="max-w-3xl text-base leading-relaxed text-slate-700 md:text-lg">
-            A weekly digest on AI across agriculture, agroforestry, forestry,
-            and ecology. We track what matters, strip out noise, and focus on
-            insights teams can use immediately.
-          </p>
-          <p className="text-sm text-slate-600">
-            Built by Grobet India Agrotech for practitioners, founders,
-            operators, and researchers working close to land systems.
-          </p>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-3">
-          {PILLARS.map((pillar) => (
-            <article
-              key={pillar.title}
-              className="rounded-2xl border border-emerald-100 bg-white/85 p-5 shadow-sm"
-            >
-              <h2 className="text-lg font-semibold text-emerald-900">
-                {pillar.title}
-              </h2>
-              <p className="mt-2 text-sm leading-relaxed text-slate-700">
-                {pillar.detail}
-              </p>
-            </article>
-          ))}
-        </div>
-
-        <section className="rounded-2xl border border-emerald-200 bg-white p-6 shadow-sm md:p-8">
-          <div className="space-y-3">
-            <h2 className="text-2xl font-semibold text-emerald-950 md:text-3xl">
-              Join the early subscriber list
-            </h2>
-            <p className="max-w-2xl text-sm leading-relaxed text-slate-700 md:text-base">
-              You will receive one issue each week. No spam, no noisy alerts,
-              and no sharing of your information.
-            </p>
-          </div>
-
-          <form
-            onSubmit={handleSubmit}
-            className="mt-6 grid gap-3 md:grid-cols-[1fr_1fr_auto]"
-          >
-            <label className="sr-only" htmlFor="name">
-              Name
-            </label>
-            <input
-              id="name"
-              name="name"
-              type="text"
-              autoComplete="name"
-              placeholder="Name (optional)"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              className="h-12 rounded-xl border border-slate-300 px-4 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
+    <main
+      style={{
+        maxWidth: 680,
+        margin: '0 auto',
+        padding: '48px 24px',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        color: '#1a1a1a'
+      }}
+    >
+      <header style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 48 }}>
+        <div
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: '50%',
+            background: '#173404',
+            color: '#C0DD97',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontWeight: 500,
+            fontSize: 14,
+            overflow: 'hidden'
+          }}
+        >
+          {LANDING_LOGO_URL ? (
+            // Image-ready slot when a real logo URL is added.
+            <img
+              src={LANDING_LOGO_URL}
+              alt="Grow Better India"
+              width={44}
+              height={44}
+              style={{ display: 'block', width: '44px', height: '44px', objectFit: 'cover' }}
             />
+          ) : (
+            'GB'
+          )}
+        </div>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 500, color: '#173404' }}>Grow Better India</div>
+          <div style={{ fontSize: 11, color: '#888780', letterSpacing: 1, textTransform: 'uppercase' }}>
+            Sandalwood Intelligence
+          </div>
+        </div>
+      </header>
 
-            <label className="sr-only" htmlFor="email">
-              Email address
-            </label>
+      <div style={{ marginBottom: 40 }}>
+        <div
+          style={{
+            fontSize: 11,
+            letterSpacing: 3,
+            color: '#3B6D11',
+            textTransform: 'uppercase',
+            fontWeight: 500,
+            marginBottom: 10
+          }}
+        >
+          A weekly briefing
+        </div>
+        <h1
+          style={{
+            fontFamily: 'Georgia, serif',
+            fontSize: 52,
+            margin: '0 0 16px',
+            fontWeight: 500,
+            color: '#173404',
+            letterSpacing: -1,
+            lineHeight: 1.05
+          }}
+        >
+          The AI Green Wire
+        </h1>
+        <p
+          style={{
+            fontSize: 17,
+            color: '#5F5E5A',
+            fontStyle: 'italic',
+            fontFamily: 'Georgia, serif',
+            lineHeight: 1.5,
+            marginBottom: 0
+          }}
+        >
+          What changed this week in AI for agriculture, agroforestry, forestry, biodiversity and the natural world
+          {' — '}curated for growers, foresters and students.
+        </p>
+      </div>
+
+      <div style={{ background: '#FBF9F2', border: '0.5px solid #C0DD97', borderRadius: 12, padding: '24px 28px', marginBottom: 40 }}>
+        <p style={{ fontSize: 15, margin: '0 0 20px', lineHeight: 1.65, color: '#2C2C2A' }}>
+          Every Monday morning, a two-page briefing lands in your inbox covering the week&apos;s most important
+          developments in AI applied to farming, forestry and ecology {'— '}with special attention to India and Indian
+          growers. Written and edited by <strong style={{ fontWeight: 500 }}>Mallesh Samala</strong>, co-founder of Grobet
+          India Agrotech and a Karnataka Forest Department certified sandalwood trainer.
+        </p>
+        <p style={{ fontSize: 14, margin: '0 0 20px', lineHeight: 1.65, color: '#5F5E5A' }}>
+          Free forever. No advertising. Unsubscribe in one click.
+        </p>
+
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: 12 }}>
             <input
-              id="email"
-              name="email"
+              type="text"
+              placeholder="Your name (optional)"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '12px 14px',
+                fontSize: 15,
+                border: '0.5px solid #C0DD97',
+                borderRadius: 8,
+                background: '#fff',
+                fontFamily: 'inherit'
+              }}
+            />
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <input
               type="email"
               required
-              autoComplete="email"
-              placeholder="Email address"
+              placeholder="your@email.com"
               value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              className="h-12 rounded-xl border border-slate-300 px-4 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
+              onChange={(e) => setEmail(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '12px 14px',
+                fontSize: 15,
+                border: '0.5px solid #C0DD97',
+                borderRadius: 8,
+                background: '#fff',
+                fontFamily: 'inherit'
+              }}
             />
-
-            <button
-              type="submit"
-              disabled={submissionState === "submitting"}
-              className="h-12 rounded-xl bg-emerald-700 px-5 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-emerald-500"
-            >
-              {submissionState === "submitting"
-                ? "Submitting..."
-                : "Subscribe"}
-            </button>
-          </form>
-
-          <div className="mt-3 min-h-6 text-sm" aria-live="polite">
-            {submissionState === "success" && (
-              <p className="text-emerald-800">{feedbackMessage}</p>
-            )}
-            {submissionState === "error" && (
-              <p className="text-amber-800">{feedbackMessage}</p>
-            )}
           </div>
-        </section>
-      </section>
+          <button
+            type="submit"
+            disabled={status === 'loading'}
+            style={{
+              width: '100%',
+              padding: '14px',
+              fontSize: 15,
+              fontWeight: 500,
+              background: '#173404',
+              color: '#C0DD97',
+              border: 'none',
+              borderRadius: 8,
+              cursor: status === 'loading' ? 'wait' : 'pointer',
+              fontFamily: 'inherit'
+            }}
+          >
+            {status === 'loading' ? 'Subscribing…' : 'Subscribe'}
+          </button>
+        </form>
+
+        {status === 'success' && (
+          <div
+            style={{ marginTop: 14, padding: '10px 14px', background: '#EAF3DE', color: '#173404', borderRadius: 6, fontSize: 14 }}
+          >
+            {message}
+          </div>
+        )}
+        {status === 'error' && (
+          <div
+            style={{ marginTop: 14, padding: '10px 14px', background: '#FCEBEB', color: '#791F1F', borderRadius: 6, fontSize: 14 }}
+          >
+            {message}
+          </div>
+        )}
+      </div>
+
+      <div style={{ fontSize: 14, color: '#5F5E5A', lineHeight: 1.7, marginBottom: 24 }}>
+        <p>
+          <strong style={{ fontWeight: 500, color: '#173404' }}>What you&apos;ll read about:</strong> India&apos;s AI policy shifts
+          (Bharat-VISTAAR, AI Centres of Excellence), state-level pilots from Telangana to Maharashtra, global
+          developments in AI forest monitoring and carbon accounting, biodiversity AI research from FAO to Google, and
+          live opportunities for Indian agriculture students and researchers.
+        </p>
+        <p>
+          <strong style={{ fontWeight: 500, color: '#173404' }}>Who it&apos;s for:</strong> Farmers and agroforestry growers,
+          forest department officers, agriculture university faculty and students, policy makers, and anyone who
+          believes AI will reshape how we work the land.
+        </p>
+      </div>
+
+      <Link href="/issues" style={{ display: 'inline-block', fontSize: 14, color: '#3B6D11', textDecoration: 'none', marginBottom: 32 }}>
+        Browse the archive →
+      </Link>
+
+      <footer
+        style={{
+          borderTop: '0.5px solid #C0DD97',
+          paddingTop: 16,
+          fontSize: 11,
+          color: '#888780',
+          lineHeight: 1.6,
+          textAlign: 'center'
+        }}
+      >
+        Published by Grobet India Agrotech Pvt Ltd (CIN U62090KA2023PTC170106) {'· '}Bengaluru, India
+        <br />
+        In service of the Sandalwood Intelligence Platform community
+      </footer>
     </main>
   );
 }

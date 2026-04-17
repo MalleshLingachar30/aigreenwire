@@ -1,12 +1,5 @@
+import type { IssueData, Story } from "@/lib/claude";
 import { sql } from "@/lib/db";
-
-export type ArchiveStory = {
-  title: string;
-  summary: string;
-  source: string;
-  url: string;
-  tag?: string;
-};
 
 export type ArchiveIssue = {
   id: string;
@@ -14,13 +7,13 @@ export type ArchiveIssue = {
   slug: string;
   title: string;
   subjectLine: string;
-  greetingBlurb: string;
-  stories: ArchiveStory[];
   status: string;
   generatedAt: string;
   approvedAt: string | null;
   sentAt: string | null;
   publishedAt: string;
+  data: IssueData;
+  htmlRendered: string;
 };
 
 type ArchiveIssueRow = {
@@ -31,6 +24,7 @@ type ArchiveIssueRow = {
   subject_line: string;
   greeting_blurb: string | null;
   stories_json: unknown;
+  html_rendered: string;
   status: string;
   generated_at: string;
   approved_at: string | null;
@@ -52,14 +46,14 @@ function asText(value: unknown, maxLength: number): string | null {
   return compact.slice(0, maxLength);
 }
 
-function asUrl(value: unknown): string | null {
+function asHttpsUrl(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;
   }
 
   try {
     const parsed = new URL(value.trim());
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    if (parsed.protocol !== "https:") {
       return null;
     }
     return parsed.toString();
@@ -68,49 +62,179 @@ function asUrl(value: unknown): string | null {
   }
 }
 
-function parseStories(value: unknown): ArchiveStory[] {
-  let storiesInput = value;
+function parseStory(input: unknown): Story | null {
+  if (!input || typeof input !== "object") {
+    return null;
+  }
+
+  const raw = input as Record<string, unknown>;
+  const section = raw.section;
+  if (section !== "india" && section !== "forestry" && section !== "students") {
+    return null;
+  }
+
+  const tag = asText(raw.tag, 80);
+  const headline = asText(raw.headline, 220);
+  if (!tag || !headline) {
+    return null;
+  }
+
+  if (!Array.isArray(raw.paragraphs) || raw.paragraphs.length < 2) {
+    return null;
+  }
+
+  const paragraphs = raw.paragraphs
+    .map((paragraph) => asText(paragraph, 2000))
+    .filter((paragraph): paragraph is string => paragraph !== null);
+
+  if (paragraphs.length < 2) {
+    return null;
+  }
+
+  if (!Array.isArray(raw.sources) || raw.sources.length === 0) {
+    return null;
+  }
+
+  const sources = raw.sources
+    .map((source) => {
+      if (!source || typeof source !== "object") {
+        return null;
+      }
+      const sourceObj = source as Record<string, unknown>;
+      const name = asText(sourceObj.name, 120);
+      const url = asHttpsUrl(sourceObj.url);
+      if (!name || !url) {
+        return null;
+      }
+      return { name, url };
+    })
+    .filter((source): source is { name: string; url: string } => source !== null);
+
+  if (sources.length === 0) {
+    return null;
+  }
+
+  const action = asText(raw.action, 600) ?? undefined;
+
+  return {
+    section,
+    tag,
+    headline,
+    paragraphs,
+    ...(action ? { action } : {}),
+    sources,
+  };
+}
+
+function parseIssueData(
+  value: unknown,
+  issueNumber: number,
+  subjectLine: string,
+  greetingBlurb: string
+): IssueData | null {
+  let parsedInput = value;
   if (typeof value === "string") {
     try {
-      storiesInput = JSON.parse(value) as unknown;
+      parsedInput = JSON.parse(value) as unknown;
     } catch {
-      return [];
+      return null;
     }
   }
 
-  if (!Array.isArray(storiesInput)) {
-    return [];
+  if (!parsedInput || typeof parsedInput !== "object") {
+    return null;
   }
 
-  return storiesInput
-    .map((story): ArchiveStory | null => {
-      if (!story || typeof story !== "object") {
+  const raw = parsedInput as Record<string, unknown>;
+  const storiesRaw = Array.isArray(raw.stories) ? raw.stories : [];
+  const stories = storiesRaw
+    .map((story) => parseStory(story))
+    .filter((story): story is Story => story !== null);
+
+  if (stories.length !== 9) {
+    return null;
+  }
+
+  const indiaCount = stories.filter((story) => story.section === "india").length;
+  const forestryCount = stories.filter((story) => story.section === "forestry").length;
+  const studentsCount = stories.filter((story) => story.section === "students").length;
+  if (indiaCount !== 3 || forestryCount !== 4 || studentsCount !== 2) {
+    return null;
+  }
+
+  const statsRaw = Array.isArray(raw.stats) ? raw.stats : [];
+  const stats = statsRaw
+    .map((stat) => {
+      if (!stat || typeof stat !== "object") {
         return null;
       }
 
-      const title = asText((story as { title?: unknown }).title, 180);
-      const summary = asText((story as { summary?: unknown }).summary, 700);
-      const source = asText((story as { source?: unknown }).source, 120);
-      const url = asUrl((story as { url?: unknown }).url);
-      const tag = asText((story as { tag?: unknown }).tag, 80) ?? undefined;
+      const statObj = stat as Record<string, unknown>;
+      const value = asText(statObj.value, 80);
+      const label = asText(statObj.label, 240);
+      const source_name = asText(statObj.source_name, 120);
+      const source_url = asHttpsUrl(statObj.source_url);
 
-      if (!title || !summary || !source || !url) {
+      if (!value || !label || !source_name || !source_url) {
         return null;
       }
 
-      return {
-        title,
-        summary,
-        source,
-        url,
-        ...(tag ? { tag } : {}),
-      };
+      return { value, label, source_name, source_url };
     })
-    .filter((story): story is ArchiveStory => story !== null);
+    .filter(
+      (
+        stat
+      ): stat is {
+        value: string;
+        label: string;
+        source_name: string;
+        source_url: string;
+      } => stat !== null
+    );
+
+  if (stats.length !== 4) {
+    return null;
+  }
+
+  const fieldNoteRaw = Array.isArray(raw.field_note) ? raw.field_note : [];
+  const field_note = fieldNoteRaw
+    .map((paragraph) => asText(paragraph, 2600))
+    .filter((paragraph): paragraph is string => paragraph !== null);
+
+  if (field_note.length !== 2) {
+    return null;
+  }
+
+  const greeting = asText(raw.greeting_blurb, 3200) ?? greetingBlurb;
+  if (!greeting.startsWith("Namaste.")) {
+    return null;
+  }
+
+  const fromPayloadSubject = asText(raw.subject_line, 220) ?? subjectLine;
+
+  return {
+    issue_number: issueNumber,
+    subject_line: fromPayloadSubject,
+    greeting_blurb: greeting,
+    stories,
+    stats,
+    field_note,
+  };
 }
 
-function mapArchiveIssue(row: ArchiveIssueRow): ArchiveIssue {
+function mapArchiveIssue(row: ArchiveIssueRow): ArchiveIssue | null {
   const publishedAt = row.sent_at ?? row.approved_at ?? row.generated_at;
+
+  const issueData = parseIssueData(
+    row.stories_json,
+    Number(row.issue_number),
+    row.subject_line,
+    row.greeting_blurb ?? ""
+  );
+
+  if (!issueData) {
+    return null;
+  }
 
   return {
     id: row.id,
@@ -118,13 +242,13 @@ function mapArchiveIssue(row: ArchiveIssueRow): ArchiveIssue {
     slug: row.slug,
     title: row.title,
     subjectLine: row.subject_line,
-    greetingBlurb: row.greeting_blurb ?? "",
-    stories: parseStories(row.stories_json),
     status: row.status,
     generatedAt: row.generated_at,
     approvedAt: row.approved_at,
     sentAt: row.sent_at,
     publishedAt,
+    data: issueData,
+    htmlRendered: row.html_rendered,
   };
 }
 
@@ -170,6 +294,7 @@ export async function listArchiveIssues(limit?: number): Promise<ArchiveIssue[]>
       subject_line,
       greeting_blurb,
       stories_json,
+      html_rendered,
       status,
       generated_at::text AS generated_at,
       approved_at::text AS approved_at,
@@ -180,7 +305,9 @@ export async function listArchiveIssues(limit?: number): Promise<ArchiveIssue[]>
     LIMIT ${safeLimit}
   `) as ArchiveIssueRow[];
 
-  return rows.map(mapArchiveIssue);
+  return rows
+    .map((row) => mapArchiveIssue(row))
+    .filter((row): row is ArchiveIssue => row !== null);
 }
 
 export async function getArchiveIssueBySlug(
@@ -195,6 +322,7 @@ export async function getArchiveIssueBySlug(
       subject_line,
       greeting_blurb,
       stories_json,
+      html_rendered,
       status,
       generated_at::text AS generated_at,
       approved_at::text AS approved_at,
@@ -206,5 +334,9 @@ export async function getArchiveIssueBySlug(
   `) as ArchiveIssueRow[];
 
   const issue = rows[0];
-  return issue ? mapArchiveIssue(issue) : null;
+  if (!issue) {
+    return null;
+  }
+
+  return mapArchiveIssue(issue);
 }

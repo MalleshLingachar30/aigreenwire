@@ -54,9 +54,7 @@ export default async function IssuesPage() {
                   </Link>
                 </h2>
                 <p className="mt-2 text-sm text-slate-700">{issue.subjectLine}</p>
-                <p className="mt-3 text-sm text-slate-600">
-                  {issue.stories.length} stories
-                </p>
+                <p className="mt-3 text-sm text-slate-600">{issue.data.stories.length} stories</p>
               </article>
             ))}
           </section>
