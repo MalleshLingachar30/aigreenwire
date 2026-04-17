@@ -70,6 +70,28 @@ create index if not exists idx_send_log_issue  on send_log(issue_id);
 create index if not exists idx_send_log_status on send_log(status);
 
 -- =========================================
+-- WhatsApp cards (multilingual story cards)
+-- =========================================
+create table if not exists whatsapp_cards (
+  id             uuid primary key default gen_random_uuid(),
+  issue_id       uuid references issues(id) on delete cascade,
+  issue_number   integer not null,
+  language       text not null check (language in ('kn', 'te', 'ta', 'hi')),
+  card_number    integer not null check (card_number between 1 and 3),
+  headline       text not null,
+  summary        text not null,
+  action_text    text not null,
+  tag            text,
+  source_url     text,
+  source_name    text,
+  created_at     timestamptz default now(),
+  unique (issue_id, language, card_number)
+);
+
+create index if not exists idx_whatsapp_cards_issue on whatsapp_cards(issue_number);
+create index if not exists idx_whatsapp_cards_lang on whatsapp_cards(language);
+
+-- =========================================
 -- View: active subscribers ready to receive mail
 -- =========================================
 create or replace view active_subscribers as

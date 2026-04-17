@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { type IssueData } from "@/lib/claude";
 import { isAdminRequestAuthorized } from "@/lib/api-auth";
 import { sql } from "@/lib/db";
 import { sendEmail } from "@/lib/resend";
-import { isUuidToken, isValidEmail, normalizeEmail } from "@/lib/subscription";
+import { buildAppUrl, isUuidToken, isValidEmail, normalizeEmail } from "@/lib/subscription";
+import { generateTranslatedCards, upsertWhatsAppCards } from "@/lib/whatsapp-cards";
 
 type ApprovePayload = {
   issueId?: unknown;
@@ -17,8 +19,33 @@ type IssueRow = {
   title: string;
   subject_line: string;
   html_rendered: string;
+  stories_json: unknown;
   status: string;
 };
+
+function parseIssueData(raw: unknown, issueNumber: number): IssueData {
+  let payload = raw;
+
+  if (typeof payload === "string") {
+    try {
+      payload = JSON.parse(payload);
+    } catch {
+      throw new Error("stories_json contains invalid JSON.");
+    }
+  }
+
+  if (!payload || typeof payload !== "object") {
+    throw new Error("stories_json is missing.");
+  }
+
+  const issueData = payload as Partial<IssueData>;
+  if (!Array.isArray(issueData.stories)) {
+    throw new Error("stories_json has no stories array.");
+  }
+
+  issueData.issue_number = issueNumber;
+  return issueData as IssueData;
+}
 
 function getEditorEmail(): string {
   const value = normalizeEmail(process.env.EDITOR_EMAIL ?? "");
@@ -41,6 +68,7 @@ async function findIssueForApproval(
         title,
         subject_line,
         html_rendered,
+        stories_json,
         status
       FROM issues
       WHERE id = ${issueId}
@@ -58,6 +86,7 @@ async function findIssueForApproval(
         title,
         subject_line,
         html_rendered,
+        stories_json,
         status
       FROM issues
       WHERE slug = ${slug}
@@ -74,6 +103,7 @@ async function findIssueForApproval(
       title,
       subject_line,
       html_rendered,
+      stories_json,
       status
     FROM issues
     WHERE status = 'draft'
@@ -211,6 +241,25 @@ export async function POST(request: NextRequest) {
       VALUES (${issue.id}, ${requestedRecipient}, ${messageId}, 'sent')
     `;
 
+    let cardsGenerated = false;
+    let cardsCount = 0;
+    let cardsError: string | null = null;
+    const cardsGalleryUrl = buildAppUrl("/api/cards/gallery", {
+      issue: String(issue.issue_number),
+    });
+
+    try {
+      const issueData = parseIssueData(issue.stories_json, Number(issue.issue_number));
+      const translatedCards = await generateTranslatedCards(issueData);
+      await upsertWhatsAppCards(issue.id, Number(issue.issue_number), translatedCards);
+      cardsGenerated = true;
+      cardsCount = translatedCards.length;
+    } catch (cardsFailure) {
+      cardsError =
+        cardsFailure instanceof Error ? cardsFailure.message : "WhatsApp card generation failed.";
+      console.error("[cards] WhatsApp generation failure:", cardsFailure);
+    }
+
     return NextResponse.json(
       {
         ok: true,
@@ -225,6 +274,12 @@ export async function POST(request: NextRequest) {
           to: requestedRecipient,
           messageId,
           mode: "send-to-self",
+        },
+        cards: {
+          generated: cardsGenerated,
+          count: cardsCount,
+          galleryUrl: cardsGalleryUrl,
+          ...(cardsError ? { error: cardsError } : {}),
         },
       },
       { status: 200 }
