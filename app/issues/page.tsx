@@ -24,20 +24,20 @@ export default async function IssuesPage() {
       <section className="mx-auto w-full max-w-4xl px-6 pb-16 pt-12 md:px-10">
         <header className="space-y-4">
           <p className="inline-flex rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">
-            Public Archive
+            Subscriber Archive
           </p>
           <h1 className="text-3xl font-semibold leading-tight text-emerald-950 md:text-5xl">
             The AI Green Wire Issues
           </h1>
           <p className="max-w-2xl text-sm leading-relaxed text-slate-700 md:text-base">
-            Published issues from the weekly AI agriculture and ecology briefing.
+            Published issues from the weekly AI agriculture and ecology briefing for confirmed subscribers.
           </p>
         </header>
 
         {issues.length === 0 ? (
           <section className="mt-10 rounded-2xl border border-emerald-200 bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-emerald-900">
-              No public issues yet
+              No issues yet
             </h2>
             <p className="mt-2 text-sm text-slate-700">
               Once an issue is approved, it will appear here automatically.

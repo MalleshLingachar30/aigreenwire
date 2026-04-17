@@ -54,7 +54,11 @@ export function buildAppUrl(
   return url.toString();
 }
 
-export function buildConfirmEmailHtml(confirmUrl: string, name?: string | null): string {
+export function buildConfirmEmailHtml(
+  confirmUrl: string,
+  unsubscribeUrl: string,
+  name?: string | null
+): string {
   const greeting = name ? `Hi ${escapeHtml(name)},` : "Hi,";
 
   return [
@@ -63,6 +67,7 @@ export function buildConfirmEmailHtml(confirmUrl: string, name?: string | null):
     "<p>Please confirm your subscription by clicking the button below:</p>",
     `<p><a href=\"${confirmUrl}\" style=\"display:inline-block;padding:10px 16px;background:#047857;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;\">Confirm Subscription</a></p>`,
     `<p>If the button does not work, copy this URL into your browser:<br/><a href=\"${confirmUrl}\">${confirmUrl}</a></p>`,
+    `<p>If you want to stop now, unsubscribe in one click:<br/><a href=\"${unsubscribeUrl}\">${unsubscribeUrl}</a></p>`,
     "<p>If you did not request this, you can ignore this email.</p>",
     "<p>— Mallesh Lingachar, Editor, The AI Green Wire</p>",
   ].join("");

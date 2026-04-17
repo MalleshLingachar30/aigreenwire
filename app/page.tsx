@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
 const LANDING_LOGO_URL = '/assets/grobet-logo.png';
@@ -11,6 +11,17 @@ export default function LandingPage() {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
   const [showLandingLogo, setShowLandingLogo] = useState(true);
+
+  useEffect(() => {
+    const archiveStatus = new URLSearchParams(window.location.search).get('archive');
+
+    if (archiveStatus === 'subscribe' && status === 'idle' && !message) {
+      setStatus('success');
+      setMessage(
+        'Archive access is for confirmed subscribers. Confirm your email once in this browser, then browse the archive.'
+      );
+    }
+  }, [message, status]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -139,7 +150,10 @@ export default function LandingPage() {
           sandalwood trainer.
         </p>
         <p style={{ fontSize: 14, margin: '0 0 20px', lineHeight: 1.65, color: '#5F5E5A' }}>
-          Free forever. No advertising. Unsubscribe in one click.
+          Free forever. No advertising.{' '}
+          <Link href="/unsubscribe" style={{ color: '#3B6D11', textDecoration: 'underline' }}>
+            Unsubscribe in one click.
+          </Link>
         </p>
 
         <form onSubmit={handleSubmit}>
@@ -245,6 +259,10 @@ export default function LandingPage() {
         Published by Grobet India Agrotech Pvt Ltd (CIN U62090KA2023PTC170106) {'· '}Bengaluru, India
         <br />
         In service of the Sandalwood Intelligence Platform community
+        <br />
+        <Link href="/unsubscribe" style={{ color: '#3B6D11', textDecoration: 'underline' }}>
+          Manage subscription or unsubscribe
+        </Link>
       </footer>
     </main>
   );

@@ -22,6 +22,7 @@ type ExistingSubscriberRow = {
 
 type ConfirmTokenRow = {
   confirm_token: string;
+  unsubscribe_token: string;
 };
 
 export async function POST(request: NextRequest) {
@@ -76,6 +77,7 @@ export async function POST(request: NextRequest) {
     }
 
     let confirmToken: string | null = null;
+    let unsubscribeToken: string | null = null;
 
     if (existing) {
       const updatedRows = (await sql`
@@ -89,31 +91,40 @@ export async function POST(request: NextRequest) {
           confirm_token = gen_random_uuid(),
           unsubscribe_token = gen_random_uuid()
         WHERE id = ${existing.id}
-        RETURNING confirm_token::text AS confirm_token
+        RETURNING
+          confirm_token::text AS confirm_token,
+          unsubscribe_token::text AS unsubscribe_token
       `) as ConfirmTokenRow[];
 
       confirmToken = updatedRows[0]?.confirm_token ?? null;
+      unsubscribeToken = updatedRows[0]?.unsubscribe_token ?? null;
     } else {
       const insertedRows = (await sql`
         INSERT INTO subscribers (email, name, source)
         VALUES (${email}, ${name}, 'landing-page')
-        RETURNING confirm_token::text AS confirm_token
+        RETURNING
+          confirm_token::text AS confirm_token,
+          unsubscribe_token::text AS unsubscribe_token
       `) as ConfirmTokenRow[];
 
       confirmToken = insertedRows[0]?.confirm_token ?? null;
+      unsubscribeToken = insertedRows[0]?.unsubscribe_token ?? null;
     }
 
-    if (!confirmToken) {
-      throw new Error("Failed to issue confirmation token.");
+    if (!confirmToken || !unsubscribeToken) {
+      throw new Error("Failed to issue subscription tokens.");
     }
 
     const confirmUrl = buildAppUrl("/api/confirm", { token: confirmToken });
+    const unsubscribeUrl = buildAppUrl("/api/unsubscribe", {
+      token: unsubscribeToken,
+    });
 
     try {
       await sendEmail({
         to: email,
         subject: "Confirm your subscription to The AI Green Wire",
-        html: buildConfirmEmailHtml(confirmUrl, name),
+        html: buildConfirmEmailHtml(confirmUrl, unsubscribeUrl, name),
         tags: [
           { name: "flow", value: "double-opt-in" },
           { name: "action", value: "subscribe-confirm" },

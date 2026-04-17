@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { clearArchiveAccessCookie } from "@/lib/archive-access";
 import { sql } from "@/lib/db";
 import { buildAppUrl, isUuidToken } from "@/lib/subscription";
 
@@ -7,10 +8,19 @@ type SubscriberRow = {
   unsubscribed_at: string | null;
 };
 
-function redirectToUnsubscribe(status: string): NextResponse {
+function redirectToUnsubscribe(
+  status: string,
+  options: { clearArchiveCookie?: boolean } = {}
+): NextResponse {
   const target = new URL("/unsubscribe", buildAppUrl("/"));
   target.searchParams.set("status", status);
-  return NextResponse.redirect(target);
+  const response = NextResponse.redirect(target);
+
+  if (options.clearArchiveCookie) {
+    clearArchiveAccessCookie(response);
+  }
+
+  return response;
 }
 
 export async function GET(request: NextRequest) {
@@ -36,7 +46,9 @@ export async function GET(request: NextRequest) {
     }
 
     if (subscriber.unsubscribed_at) {
-      return redirectToUnsubscribe("already-unsubscribed");
+      return redirectToUnsubscribe("already-unsubscribed", {
+        clearArchiveCookie: true,
+      });
     }
 
     await sql`
@@ -45,7 +57,7 @@ export async function GET(request: NextRequest) {
       WHERE id = ${subscriber.id}
     `;
 
-    return redirectToUnsubscribe("unsubscribed");
+    return redirectToUnsubscribe("unsubscribed", { clearArchiveCookie: true });
   } catch {
     return redirectToUnsubscribe("error");
   }

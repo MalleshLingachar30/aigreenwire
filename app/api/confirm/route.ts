@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { setArchiveAccessCookie } from "@/lib/archive-access";
 import { sql } from "@/lib/db";
 import { buildAppUrl, isUuidToken } from "@/lib/subscription";
 
@@ -13,15 +14,24 @@ type UpdatedSubscriberRow = {
   unsubscribe_token: string;
 };
 
-function redirectToUnsubscribe(status: string, token?: string): NextResponse {
+function redirectToUnsubscribe(
+  status: string,
+  options: { token?: string; archiveAccessToken?: string } = {}
+): NextResponse {
   const target = new URL("/unsubscribe", buildAppUrl("/"));
   target.searchParams.set("status", status);
 
-  if (token) {
-    target.searchParams.set("token", token);
+  if (options.token) {
+    target.searchParams.set("token", options.token);
   }
 
-  return NextResponse.redirect(target);
+  const response = NextResponse.redirect(target);
+
+  if (options.archiveAccessToken) {
+    setArchiveAccessCookie(response, options.archiveAccessToken);
+  }
+
+  return response;
 }
 
 export async function GET(request: NextRequest) {
@@ -49,7 +59,10 @@ export async function GET(request: NextRequest) {
     }
 
     if (subscriber.confirmed_at && !subscriber.unsubscribed_at) {
-      return redirectToUnsubscribe("already-confirmed", subscriber.unsubscribe_token);
+      return redirectToUnsubscribe("already-confirmed", {
+        token: subscriber.unsubscribe_token,
+        archiveAccessToken: subscriber.unsubscribe_token,
+      });
     }
 
     const updatedRows = (await sql`
@@ -65,7 +78,10 @@ export async function GET(request: NextRequest) {
     const unsubscribeToken =
       updatedRows[0]?.unsubscribe_token ?? subscriber.unsubscribe_token;
 
-    return redirectToUnsubscribe("confirmed", unsubscribeToken);
+    return redirectToUnsubscribe("confirmed", {
+      token: unsubscribeToken,
+      archiveAccessToken: unsubscribeToken,
+    });
   } catch {
     return redirectToUnsubscribe("error");
   }

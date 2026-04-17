@@ -73,6 +73,15 @@ export default async function UnsubscribePage({
           </Link>
         )}
 
+        {(status === "confirmed" || status === "already-confirmed") && (
+          <Link
+            href="/issues"
+            className="ml-3 mt-6 inline-flex rounded-lg border border-green-300 px-4 py-2 text-sm font-semibold text-green-800 transition hover:bg-green-100"
+          >
+            Browse subscriber archive
+          </Link>
+        )}
+
         <Link
           href="/"
           className="mt-6 inline-flex rounded-lg border border-green-300 px-4 py-2 text-sm font-semibold text-green-800 transition hover:bg-green-100"
