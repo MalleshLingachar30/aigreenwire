@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import type { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { isUuidToken } from "@/lib/subscription";
@@ -13,12 +13,37 @@ type ArchiveAccessRow = {
   id: string;
 };
 
-export async function requireArchiveAccess(): Promise<void> {
-  const cookieStore = await cookies();
-  const archiveAccessToken =
-    cookieStore.get(ARCHIVE_ACCESS_COOKIE)?.value?.trim() ?? null;
+/**
+ * Resolve the archive-access token from (in priority order):
+ *  1. The `x-archive-token` request header set by middleware when the URL
+ *     contains `?token=X`.  This is the most reliable path because it does
+ *     not depend on cookies at all — works in in-app browsers that strip
+ *     or isolate cookies.
+ *  2. The `aigw_archive_access` cookie set on a previous visit.
+ */
+async function resolveToken(): Promise<string | null> {
+  // 1. Header set by middleware (single-request flow, no cookie needed).
+  const headerStore = await headers();
+  const fromHeader = headerStore.get("x-archive-token")?.trim() ?? null;
+  if (isUuidToken(fromHeader)) {
+    return fromHeader;
+  }
 
-  if (!isUuidToken(archiveAccessToken)) {
+  // 2. Persistent cookie from a prior visit.
+  const cookieStore = await cookies();
+  const fromCookie =
+    cookieStore.get(ARCHIVE_ACCESS_COOKIE)?.value?.trim() ?? null;
+  if (isUuidToken(fromCookie)) {
+    return fromCookie;
+  }
+
+  return null;
+}
+
+export async function requireArchiveAccess(): Promise<void> {
+  const archiveAccessToken = await resolveToken();
+
+  if (!archiveAccessToken) {
     redirect(ARCHIVE_ACCESS_REQUIRED_REDIRECT);
   }
 
