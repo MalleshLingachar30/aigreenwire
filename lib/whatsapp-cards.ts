@@ -55,6 +55,9 @@ export const LANGUAGE_CONFIG: Record<
 
 const LANGUAGE_LIST: Language[] = ["kn", "te", "ta", "hi"];
 const TRANSLATION_MODEL = "claude-sonnet-4-20250514";
+const TRANSLATION_MAX_TOKENS_SINGLE = 900;
+const TRANSLATION_TIMEOUT_MS = 25_000;
+const TRANSLATION_MAX_ATTEMPTS = 3;
 
 type BaseCard = {
   cardNumber: 1 | 2 | 3;
@@ -83,6 +86,13 @@ export type TranslatedCard = {
   sourceUrl: string | null;
   sourceName: string | null;
 };
+
+class TranslationParseError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "TranslationParseError";
+  }
+}
 
 function sanitizeLine(value: string): string {
   return value.replace(/\s+/g, " ").trim();
@@ -148,7 +158,7 @@ function extractTextFromAnthropicResponse(response: any): string {
   const textBlocks = response.content.filter((block: any) => block.type === "text");
   const lastText = textBlocks[textBlocks.length - 1]?.text;
   if (typeof lastText !== "string" || !lastText.trim()) {
-    throw new Error("Claude returned no text for WhatsApp card translation.");
+    throw new TranslationParseError("Claude returned no text for WhatsApp card translation.");
   }
 
   return lastText.replace(/```json\s*/g, "").replace(/```/g, "").trim();
@@ -170,41 +180,55 @@ function parseJsonLikeText(rawResponse: string): unknown {
   try {
     return JSON.parse(jsonCandidate);
   } catch {
-    throw new Error("Claude returned invalid JSON for WhatsApp card translation.");
+    throw new TranslationParseError("Claude returned invalid JSON for WhatsApp card translation.");
   }
 }
 
 function parseTranslatedCards(payload: unknown, baseCards: BaseCard[]): TranslatedCardText[] {
   const parsed = payload && typeof payload === "object" ? payload : null;
   if (!parsed) {
-    throw new Error("Translated payload must be an object.");
+    throw new TranslationParseError("Translated payload must be an object.");
   }
 
   const cards = (parsed as { cards?: unknown }).cards;
   if (!Array.isArray(cards) || cards.length !== baseCards.length) {
-    throw new Error("Translated payload must contain 3 cards.");
+    throw new TranslationParseError("Translated payload must contain 3 cards.");
   }
 
   return cards.map((card, index) => {
     if (!card || typeof card !== "object") {
-      throw new Error(`Translated card at index ${index} is invalid.`);
+      throw new TranslationParseError(`Translated card at index ${index} is invalid.`);
     }
 
     const value = card as Record<string, unknown>;
-    const cardNumber = Number(value.cardNumber);
     const expectedCardNumber = baseCards[index]!.cardNumber;
+    const cardNumberCandidate = Number(value.cardNumber);
+    const cardNumber = Number.isInteger(cardNumberCandidate)
+      ? (cardNumberCandidate as 1 | 2 | 3)
+      : expectedCardNumber;
+
     if (cardNumber !== expectedCardNumber) {
-      throw new Error(
+      throw new TranslationParseError(
         `Translated card number mismatch at index ${index}: expected ${expectedCardNumber}, got ${cardNumber}.`
       );
     }
 
-    const headline = typeof value.headline === "string" ? sanitizeLine(value.headline) : "";
-    const summary = typeof value.summary === "string" ? sanitizeLine(value.summary) : "";
-    const actionText = typeof value.actionText === "string" ? sanitizeLine(value.actionText) : "";
+    const sourceCard = baseCards[index]!;
+    const headline =
+      typeof value.headline === "string" && sanitizeLine(value.headline)
+        ? sanitizeLine(value.headline)
+        : sourceCard.headline;
+    const summary =
+      typeof value.summary === "string" && sanitizeLine(value.summary)
+        ? sanitizeLine(value.summary)
+        : sourceCard.summary;
+    const actionText =
+      typeof value.actionText === "string" && sanitizeLine(value.actionText)
+        ? sanitizeLine(value.actionText)
+        : sourceCard.actionText;
 
     if (!headline || !summary || !actionText) {
-      throw new Error(`Translated card at index ${index} has empty fields.`);
+      throw new TranslationParseError(`Translated card at index ${index} has empty fields.`);
     }
 
     return {
@@ -216,95 +240,153 @@ function parseTranslatedCards(payload: unknown, baseCards: BaseCard[]): Translat
   });
 }
 
+function isObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object";
+}
+
+function isRetryableStatus(status: number | undefined): boolean {
+  if (typeof status !== "number") {
+    return false;
+  }
+
+  return status === 408 || status === 409 || status === 429 || status >= 500;
+}
+
+function parseRetryAfterSeconds(value: unknown): number | null {
+  if (typeof value !== "string" || !value.trim()) {
+    return null;
+  }
+
+  const asNumber = Number.parseFloat(value);
+  if (Number.isFinite(asNumber) && asNumber >= 0) {
+    return asNumber;
+  }
+
+  const asDate = Date.parse(value);
+  if (Number.isNaN(asDate)) {
+    return null;
+  }
+
+  const ms = asDate - Date.now();
+  return ms > 0 ? ms / 1000 : 0;
+}
+
+function getHeaderValue(headers: unknown, key: string): string | null {
+  if (!headers) {
+    return null;
+  }
+
+  if (headers instanceof Headers) {
+    return headers.get(key);
+  }
+
+  if (Array.isArray(headers)) {
+    const entry = headers.find(([name]) => name.toLowerCase() === key.toLowerCase());
+    return entry ? String(entry[1]) : null;
+  }
+
+  if (typeof headers === "object") {
+    const record = headers as Record<string, unknown>;
+    const direct = record[key] ?? record[key.toLowerCase()];
+    return typeof direct === "string" ? direct : null;
+  }
+
+  return null;
+}
+
+function getErrorStatus(error: unknown): number | undefined {
+  if (!isObject(error)) {
+    return undefined;
+  }
+
+  const status = error.status;
+  return typeof status === "number" ? status : undefined;
+}
+
+function getRetryAfterMs(error: unknown): number {
+  if (!isObject(error)) {
+    return 0;
+  }
+
+  const retryAfter = parseRetryAfterSeconds(getHeaderValue(error.headers, "retry-after"));
+  if (retryAfter !== null) {
+    return Math.max(250, Math.min(5_000, Math.round(retryAfter * 1_000)));
+  }
+
+  const resetAt = getHeaderValue(error.headers, "anthropic-ratelimit-output-tokens-reset");
+  if (resetAt) {
+    const resetMs = Date.parse(resetAt) - Date.now();
+    if (Number.isFinite(resetMs) && resetMs > 0) {
+      return Math.max(250, Math.min(5_000, resetMs));
+    }
+  }
+
+  return 0;
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableError(error: unknown): boolean {
+  if (isRetryableStatus(getErrorStatus(error))) {
+    return true;
+  }
+
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  return (
+    message.includes("connection error") ||
+    message.includes("network") ||
+    message.includes("timed out") ||
+    message.includes("econnreset")
+  );
+}
+
+async function createTranslationMessage(params: any) {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= TRANSLATION_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      return await anthropic.messages.create(params, {
+        timeout: TRANSLATION_TIMEOUT_MS,
+        maxRetries: 0,
+      });
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableError(error) || attempt >= TRANSLATION_MAX_ATTEMPTS) {
+        throw error;
+      }
+
+      const retryAfterMs = getRetryAfterMs(error);
+      const backoffMs = 500 * attempt;
+      await sleep(Math.max(backoffMs, retryAfterMs));
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("Translation request failed.");
+}
+
 async function translateCardsForLanguage(
   baseCards: BaseCard[],
   language: Language
 ): Promise<TranslatedCard[]> {
-  const languageMeta = LANGUAGE_CONFIG[language];
+  const translatedCards: TranslatedCard[] = [];
 
-  const prompt = [
-    `Translate 3 WhatsApp news cards into ${languageMeta.name} (${languageMeta.nativeName}).`,
-    "Use simple, grower-friendly language suitable for Indian farmers.",
-    "Keep these terms in English exactly as-is when present: AI, GPS, satellite, drone, carbon credit.",
-    "Keep proper nouns and institution names in English.",
-    "Do not add new facts, numbers, or claims. Translate only the provided text.",
-    "Return only valid JSON using this exact shape:",
-    '{"cards":[{"cardNumber":1,"headline":"...","summary":"...","actionText":"..."}]}',
-    "Input cards JSON:",
-    JSON.stringify(baseCards),
-  ].join("\n");
-
-  let lastError: unknown;
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    try {
-      const response = await anthropic.messages.create({
-        model: TRANSLATION_MODEL,
-        max_tokens: 2000,
-        tools: [
-          {
-            name: "store_translation",
-            description: "Save translated WhatsApp cards with strict JSON fields.",
-            input_schema: {
-              type: "object",
-              properties: {
-                cards: {
-                  type: "array",
-                  minItems: 3,
-                  maxItems: 3,
-                  items: {
-                    type: "object",
-                    properties: {
-                      cardNumber: { type: "integer", enum: [1, 2, 3] },
-                      headline: { type: "string" },
-                      summary: { type: "string" },
-                      actionText: { type: "string" },
-                    },
-                    required: ["cardNumber", "headline", "summary", "actionText"],
-                  },
-                },
-              },
-              required: ["cards"],
-            },
-          },
-        ],
-        tool_choice: {
-          type: "tool",
-          name: "store_translation",
-        },
-        messages: [{ role: "user", content: prompt }],
-      } as any);
-
-      const toolBlock = (response.content as any[]).find(
-        (block) => block.type === "tool_use" && block.name === "store_translation"
-      ) as { input?: unknown } | undefined;
-      const translatedPayload =
-        toolBlock && typeof toolBlock.input === "object"
-          ? toolBlock.input
-          : parseJsonLikeText(extractTextFromAnthropicResponse(response));
-      const translatedText = parseTranslatedCards(translatedPayload, baseCards);
-
-      return translatedText.map((translated, index) => {
-        const source = baseCards[index]!;
-
-        return {
-          language,
-          cardNumber: translated.cardNumber,
-          tag: source.tag,
-          headline: translated.headline,
-          summary: translated.summary,
-          actionText: translated.actionText,
-          sourceUrl: source.sourceUrl,
-          sourceName: source.sourceName,
-        };
-      });
-    } catch (error) {
-      lastError = error;
-    }
+  for (const baseCard of baseCards) {
+    const translated = await translateSingleCardForLanguage(baseCard, language);
+    translatedCards.push({
+      language,
+      cardNumber: translated.cardNumber,
+      tag: baseCard.tag,
+      headline: translated.headline,
+      summary: translated.summary,
+      actionText: translated.actionText,
+      sourceUrl: baseCard.sourceUrl,
+      sourceName: baseCard.sourceName,
+    });
   }
 
-  throw lastError instanceof Error
-    ? lastError
-    : new Error(`Failed to translate cards for ${languageMeta.name}.`);
+  return translatedCards;
 }
 
 async function translateSingleCardForLanguage(
@@ -318,16 +400,17 @@ async function translateSingleCardForLanguage(
     "Keep these terms in English exactly as-is when present: AI, GPS, satellite, drone, carbon credit.",
     "Keep proper nouns and institution names in English.",
     "Do not add or remove facts.",
+    "Every output field must be non-empty. If translation is uncertain, keep the original English phrase instead of leaving blank text.",
+    "Return only one translated JSON object with cardNumber, headline, summary, actionText.",
     "Input card JSON:",
     JSON.stringify(baseCard),
   ].join("\n");
 
-  let lastError: unknown;
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
+  for (let parseAttempt = 1; parseAttempt <= 3; parseAttempt += 1) {
     try {
-      const response = await anthropic.messages.create({
+      const response = await createTranslationMessage({
         model: TRANSLATION_MODEL,
-        max_tokens: 800,
+        max_tokens: TRANSLATION_MAX_TOKENS_SINGLE,
         tools: [
           {
             name: "store_single_translation",
@@ -359,45 +442,22 @@ async function translateSingleCardForLanguage(
         toolBlock && typeof toolBlock.input === "object"
           ? toolBlock.input
           : parseJsonLikeText(extractTextFromAnthropicResponse(response));
-
       const cards = parseTranslatedCards({ cards: [payload] }, [baseCard]);
       return cards[0]!;
     } catch (error) {
-      lastError = error;
+      if (!(error instanceof TranslationParseError) || parseAttempt >= 3) {
+        throw error;
+      }
     }
   }
 
-  throw lastError instanceof Error
-    ? lastError
-    : new Error(`Failed to translate card ${baseCard.cardNumber} for ${languageMeta.name}.`);
+  throw new Error(`Failed to translate card ${baseCard.cardNumber} for ${languageMeta.name}.`);
 }
 
 export async function generateTranslatedCards(data: IssueData): Promise<TranslatedCard[]> {
   const baseCards = buildBaseCards(data);
   const translatedByLanguage = await Promise.all(
-    LANGUAGE_LIST.map(async (language) => {
-      try {
-        return await translateCardsForLanguage(baseCards, language);
-      } catch {
-        const fallbackCards = await Promise.all(
-          baseCards.map((baseCard) => translateSingleCardForLanguage(baseCard, language))
-        );
-
-        return fallbackCards.map((translated, index) => {
-          const source = baseCards[index]!;
-          return {
-            language,
-            cardNumber: translated.cardNumber,
-            tag: source.tag,
-            headline: translated.headline,
-            summary: translated.summary,
-            actionText: translated.actionText,
-            sourceUrl: source.sourceUrl,
-            sourceName: source.sourceName,
-          };
-        });
-      }
-    })
+    LANGUAGE_LIST.map((language) => translateCardsForLanguage(baseCards, language))
   );
 
   return translatedByLanguage.flat();
