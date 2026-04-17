@@ -6,6 +6,8 @@ import {
 } from "@/lib/archive";
 
 export const dynamic = "force-dynamic";
+const EDITOR_DESIGNATION =
+  "Executive Director - Grobet India Agrotech|AI Industry Speciallist | Certified Sandalwood Trainer| Ex Board Member-Institute of Agroforestry Farmers & Technologists| Associate - Global Green Growth";
 
 type IssuePageProps = {
   params: Promise<{ slug: string }>;
@@ -22,6 +24,10 @@ export default async function IssuePage({ params }: IssuePageProps) {
   const renderedHtml = issue.htmlRendered || "";
   const bodyMatch = renderedHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
   const issueBodyHtml = bodyMatch ? bodyMatch[1] : renderedHtml;
+  const issueBodyHtmlWithUpdatedDesignation = issueBodyHtml.replace(
+    /Director,\s*Grobet India Agrotech\s*&(?:amp;)?\s*Certified Sandalwood Trainer/gi,
+    EDITOR_DESIGNATION
+  );
 
   return (
     <main className="min-h-screen bg-[#F1EFE8] text-slate-900">
@@ -37,21 +43,8 @@ export default async function IssuePage({ params }: IssuePageProps) {
         </div>
         <section
           className="mt-6 [&_a:hover]:opacity-85"
-          dangerouslySetInnerHTML={{ __html: issueBodyHtml }}
+          dangerouslySetInnerHTML={{ __html: issueBodyHtmlWithUpdatedDesignation }}
         />
-        <section className="mt-10 rounded-xl border border-[#C0DD97] bg-[#FBF9F2] px-6 py-5">
-          <p className="text-xs uppercase tracking-[0.14em] text-[#3B6D11]">
-            From the editor
-          </p>
-          <p className="mt-2 text-lg italic text-[#173404]">
-            Mallesh Lingachar
-          </p>
-          <p className="mt-1 text-sm leading-relaxed text-[#2C2C2A]">
-            Executive Director - Grobet India Agrotech|AI Industry Speciallist |
-            Certified Sandalwood Trainer| Ex Board Member-Institute of Agroforestry
-            Farmers &amp; Technologists| Associate - Global Green Growth
-          </p>
-        </section>
       </section>
     </main>
   );

@@ -13,7 +13,11 @@ type UpdatedSubscriberRow = {
   unsubscribe_token: string;
 };
 
-function redirectToUnsubscribe(status: string, token?: string): NextResponse {
+function redirectToUnsubscribe(
+  status: string,
+  token?: string,
+  grantArchiveAccess = false
+): NextResponse {
   const target = new URL("/unsubscribe", buildAppUrl("/"));
   target.searchParams.set("status", status);
 
@@ -21,7 +25,21 @@ function redirectToUnsubscribe(status: string, token?: string): NextResponse {
     target.searchParams.set("token", token);
   }
 
-  return NextResponse.redirect(target);
+  const response = NextResponse.redirect(target);
+
+  if (grantArchiveAccess) {
+    response.cookies.set({
+      name: "archive_access",
+      value: "granted",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 30,
+      sameSite: "lax",
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+    });
+  }
+
+  return response;
 }
 
 export async function GET(request: NextRequest) {
@@ -65,7 +83,7 @@ export async function GET(request: NextRequest) {
     const unsubscribeToken =
       updatedRows[0]?.unsubscribe_token ?? subscriber.unsubscribe_token;
 
-    return redirectToUnsubscribe("confirmed", unsubscribeToken);
+    return redirectToUnsubscribe("confirmed", unsubscribeToken, true);
   } catch {
     return redirectToUnsubscribe("error");
   }

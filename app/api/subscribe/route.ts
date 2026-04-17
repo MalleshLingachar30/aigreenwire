@@ -24,6 +24,20 @@ type ConfirmTokenRow = {
   confirm_token: string;
 };
 
+function withArchiveAccessCookie(response: NextResponse): NextResponse {
+  response.cookies.set({
+    name: "archive_access",
+    value: "granted",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 30,
+    sameSite: "lax",
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+  });
+
+  return response;
+}
+
 export async function POST(request: NextRequest) {
   let payload: SubscribePayload;
 
@@ -65,13 +79,15 @@ export async function POST(request: NextRequest) {
     const existing = existingRows[0];
 
     if (existing?.confirmed_at && !existing.unsubscribed_at) {
-      return NextResponse.json(
-        {
-          ok: true,
-          status: "already_subscribed",
-          message: "This email is already subscribed.",
-        },
-        { status: 200 }
+      return withArchiveAccessCookie(
+        NextResponse.json(
+          {
+            ok: true,
+            status: "already_subscribed",
+            message: "This email is already subscribed.",
+          },
+          { status: 200 }
+        )
       );
     }
 
@@ -130,13 +146,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(
-      {
-        ok: true,
-        status: "pending_confirmation",
-        message: "Check your inbox to confirm your subscription.",
-      },
-      { status: 200 }
+    return withArchiveAccessCookie(
+      NextResponse.json(
+        {
+          ok: true,
+          status: "pending_confirmation",
+          message: "Check your inbox to confirm your subscription.",
+        },
+        { status: 200 }
+      )
     );
   } catch {
     return NextResponse.json(

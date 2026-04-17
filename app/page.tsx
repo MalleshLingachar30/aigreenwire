@@ -2,15 +2,19 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 
 const LANDING_LOGO_URL = '/assets/grobet-logo.png';
 
 export default function LandingPage() {
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
   const [showLandingLogo, setShowLandingLogo] = useState(true);
+
+  const archiveLocked = searchParams.get('archive') === 'locked';
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -147,7 +151,8 @@ export default function LandingPage() {
           <div style={{ marginBottom: 12 }}>
             <input
               type="text"
-              placeholder="Your name (optional)"
+              required
+              placeholder="Your name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               style={{
@@ -203,7 +208,7 @@ export default function LandingPage() {
           <div
             style={{ marginTop: 14, padding: '10px 14px', background: '#EAF3DE', color: '#173404', borderRadius: 6, fontSize: 14 }}
           >
-            {message}
+            {message} You can now access the archive.
           </div>
         )}
         {status === 'error' && (
@@ -214,6 +219,21 @@ export default function LandingPage() {
           </div>
         )}
       </div>
+
+      {archiveLocked && status !== 'success' && (
+        <div
+          style={{
+            marginBottom: 18,
+            padding: '10px 14px',
+            background: '#FCEBEB',
+            color: '#791F1F',
+            borderRadius: 6,
+            fontSize: 14
+          }}
+        >
+          Please subscribe with your name and email to access archived issues.
+        </div>
+      )}
 
       <div style={{ fontSize: 14, color: '#5F5E5A', lineHeight: 1.7, marginBottom: 24 }}>
         <p>
@@ -229,7 +249,16 @@ export default function LandingPage() {
         </p>
       </div>
 
-      <Link href="/issues" style={{ display: 'inline-block', fontSize: 14, color: '#3B6D11', textDecoration: 'none', marginBottom: 32 }}>
+      <Link
+        href="/issues"
+        style={{
+          display: 'inline-block',
+          fontSize: 14,
+          color: '#3B6D11',
+          textDecoration: 'none',
+          marginBottom: 32
+        }}
+      >
         Browse the archive →
       </Link>
 
