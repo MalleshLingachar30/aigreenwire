@@ -3,13 +3,14 @@
 import { useState } from 'react';
 import Link from 'next/link';
 
-const LANDING_LOGO_URL = process.env.NEXT_PUBLIC_GROBET_LOGO_URL || '';
+const LANDING_LOGO_URL = '/assets/grobet-logo.png';
 
 export default function LandingPage() {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
+  const [showLandingLogo, setShowLandingLogo] = useState(true);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -54,26 +55,32 @@ export default function LandingPage() {
             borderRadius: '50%',
             background: '#173404',
             color: '#C0DD97',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            position: 'relative',
+            textAlign: 'center',
+            lineHeight: '44px',
             fontWeight: 500,
             fontSize: 14,
-            overflow: 'hidden'
+            overflow: 'hidden',
+            letterSpacing: 1
           }}
         >
-          {LANDING_LOGO_URL ? (
-            // Image-ready slot when a real logo URL is added.
-            <img
-              src={LANDING_LOGO_URL}
-              alt="Grow Better India"
-              width={44}
-              height={44}
-              style={{ display: 'block', width: '44px', height: '44px', objectFit: 'cover' }}
-            />
-          ) : (
-            'GB'
-          )}
+          GB
+          <img
+            src={LANDING_LOGO_URL}
+            alt="Grow Better India"
+            width={44}
+            height={44}
+            onError={() => setShowLandingLogo(false)}
+            style={{
+              display: showLandingLogo ? 'block' : 'none',
+              width: '44px',
+              height: '44px',
+              objectFit: 'cover',
+              position: 'absolute',
+              top: 0,
+              left: 0
+            }}
+          />
         </div>
         <div>
           <div style={{ fontSize: 14, fontWeight: 500, color: '#173404' }}>Grow Better India</div>
@@ -128,8 +135,8 @@ export default function LandingPage() {
         <p style={{ fontSize: 15, margin: '0 0 20px', lineHeight: 1.65, color: '#2C2C2A' }}>
           Every Monday morning, a two-page briefing lands in your inbox covering the week&apos;s most important
           developments in AI applied to farming, forestry and ecology {'— '}with special attention to India and Indian
-          growers. Written and edited by <strong style={{ fontWeight: 500 }}>Mallesh Samala</strong>, co-founder of Grobet
-          India Agrotech and a Karnataka Forest Department certified sandalwood trainer.
+          growers. Written and edited by Mallesh Lingachar, Director of Grobet India Agrotech and a certified
+          sandalwood trainer.
         </p>
         <p style={{ fontSize: 14, margin: '0 0 20px', lineHeight: 1.65, color: '#5F5E5A' }}>
           Free forever. No advertising. Unsubscribe in one click.

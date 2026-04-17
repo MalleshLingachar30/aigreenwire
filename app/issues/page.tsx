@@ -7,6 +7,15 @@ import {
 
 export const dynamic = "force-dynamic";
 
+function previewGreeting(text: string, maxLength = 180): string {
+  const compact = text.replace(/\s+/g, " ").trim();
+  if (compact.length <= maxLength) {
+    return compact;
+  }
+
+  return `${compact.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
 export default async function IssuesPage() {
   const issues = await listArchiveIssues(50);
 
@@ -53,8 +62,9 @@ export default async function IssuesPage() {
                     {issue.title}
                   </Link>
                 </h2>
-                <p className="mt-2 text-sm text-slate-700">{issue.subjectLine}</p>
-                <p className="mt-3 text-sm text-slate-600">{issue.data.stories.length} stories</p>
+                <p className="mt-3 text-sm text-slate-700">
+                  {previewGreeting(issue.data.greeting_blurb)}
+                </p>
               </article>
             ))}
           </section>

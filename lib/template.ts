@@ -1,7 +1,7 @@
 import type { IssueData, Story } from "./claude";
 
-const LOGO_URL = process.env.NEXT_PUBLIC_GROBET_LOGO_URL || "";
-const PHOTO_URL = process.env.NEXT_PUBLIC_EDITOR_PHOTO_URL || "";
+const LOGO_URL = 'https://aigreenwire.com/assets/grobet-logo.png';
+const PHOTO_URL = 'https://aigreenwire.com/assets/mallesh.jpg';
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://aigreenwire.com";
 
 function weekRange(d: Date): string {
@@ -65,24 +65,18 @@ function renderStatCard(stat: IssueData["stats"][0], variant: "a" | "b" | "c" | 
 }
 
 function renderLogoSlot(): string {
-  if (!LOGO_URL) {
-    return '<div style="width:40px;height:40px;border-radius:50%;background:#C0DD97;color:#173404;text-align:center;line-height:40px;font-weight:600;font-size:12px;overflow:hidden;">GB</div>';
-  }
-
   return `
-    <div style="width:40px;height:40px;border-radius:50%;background:#C0DD97;text-align:center;line-height:40px;overflow:hidden;">
-      <img src="${LOGO_URL}" alt="Grow Better India" width="40" height="40" style="display:block;width:40px;height:40px;object-fit:cover;border-radius:50%;" />
+    <div style="width:40px;height:40px;border-radius:50%;background:#C0DD97;overflow:hidden;position:relative;text-align:center;line-height:40px;color:#173404;font-weight:500;font-size:14px;letter-spacing:1px;">
+      GB
+      <img src="${LOGO_URL}" alt="Grow Better India" width="40" height="40" style="display:block;width:40px;height:40px;object-fit:cover;border-radius:50%;position:absolute;top:0;left:0;" onerror="this.style.display='none'" />
     </div>`;
 }
 
 function renderEditorSlot(): string {
-  if (!PHOTO_URL) {
-    return '<div style="width:62px;height:62px;border-radius:50%;background:#C0DD97;border:3px solid #639922;color:#173404;text-align:center;line-height:56px;font-weight:600;font-size:14px;overflow:hidden;">MS</div>';
-  }
-
   return `
-    <div style="width:62px;height:62px;border-radius:50%;background:#C0DD97;border:3px solid #639922;overflow:hidden;">
-      <img src="${PHOTO_URL}" alt="Mallesh Samala" width="62" height="62" style="display:block;width:62px;height:62px;object-fit:cover;" />
+    <div style="width:62px;height:62px;border-radius:50%;background:#C0DD97;border:3px solid #639922;overflow:hidden;position:relative;text-align:center;line-height:62px;color:#173404;font-weight:500;font-size:18px;">
+      ML
+      <img src="${PHOTO_URL}" alt="Mallesh Lingachar" width="62" height="62" style="display:block;width:62px;height:62px;object-fit:cover;position:absolute;top:0;left:0;" onerror="this.style.display='none'" />
     </div>`;
 }
 
@@ -217,8 +211,8 @@ ${viewInBrowser}
       </td>
       <td style="padding-left:14px;vertical-align:middle;">
         <div style="font-size:12px;color:#97C459;letter-spacing:1px;text-transform:uppercase;">From the editor</div>
-        <div style="font-family:Georgia,serif;font-size:18px;font-style:italic;color:#EAF3DE;margin-top:2px;">Mallesh Samala</div>
-        <div style="font-size:11.5px;color:#C0DD97;margin-top:2px;">Co-founder, Grobet India · Karnataka Forest Dept. certified sandalwood trainer</div>
+        <div style="font-family:Georgia,serif;font-size:18px;font-style:italic;color:#EAF3DE;margin-top:2px;">Mallesh Lingachar</div>
+        <div style="font-size:11.5px;color:#C0DD97;margin-top:2px;">Director, Grobet India Agrotech & Certified Sandalwood Trainer</div>
       </td>
     </tr></table>
     <div style="font-size:13px;color:#C0DD97;margin-top:14px;line-height:1.65;font-style:italic;">
