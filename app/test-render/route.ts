@@ -1,4 +1,5 @@
 import { type IssueData } from "@/lib/claude";
+import { buildIssueDeliveryLinks } from "@/lib/issue-email";
 import { renderIssue } from "@/lib/template";
 
 const sampleIssue: IssueData = {
@@ -136,9 +137,14 @@ const sampleIssue: IssueData = {
 };
 
 export async function GET() {
+  const links = buildIssueDeliveryLinks(
+    "01-isro-bhuvan-and-icar-soil-tool",
+    "11111111-1111-4111-8111-111111111111"
+  );
+
   const html = renderIssue(sampleIssue, {
-    unsubscribeUrl: "https://aigreenwire.com/unsubscribe?token=test-render-demo",
-    viewInBrowserUrl: "https://aigreenwire.com/issues/01-isro-bhuvan-and-icar-soil-tool"
+    unsubscribeUrl: links.unsubscribeUrl,
+    viewInBrowserUrl: links.viewInBrowserUrl,
   });
 
   return new Response(html, {

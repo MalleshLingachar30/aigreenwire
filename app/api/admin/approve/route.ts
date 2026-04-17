@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { type IssueData } from "@/lib/claude";
 import { isAdminRequestAuthorized } from "@/lib/api-auth";
 import { sql } from "@/lib/db";
+import { renderIssueForSubscriber } from "@/lib/issue-email";
 import { sendEmail } from "@/lib/resend";
 import { buildAppUrl, isUuidToken, isValidEmail, normalizeEmail } from "@/lib/subscription";
 import { generateTranslatedCards, upsertWhatsAppCards } from "@/lib/whatsapp-cards";
@@ -18,9 +19,13 @@ type IssueRow = {
   slug: string;
   title: string;
   subject_line: string;
-  html_rendered: string;
   stories_json: unknown;
   status: string;
+};
+
+type SubscriberRecipientRow = {
+  id: string;
+  unsubscribe_token: string;
 };
 
 function parseIssueData(raw: unknown, issueNumber: number): IssueData {
@@ -67,7 +72,6 @@ async function findIssueForApproval(
         slug,
         title,
         subject_line,
-        html_rendered,
         stories_json,
         status
       FROM issues
@@ -85,7 +89,6 @@ async function findIssueForApproval(
         slug,
         title,
         subject_line,
-        html_rendered,
         stories_json,
         status
       FROM issues
@@ -102,7 +105,6 @@ async function findIssueForApproval(
       slug,
       title,
       subject_line,
-      html_rendered,
       stories_json,
       status
     FROM issues
@@ -110,6 +112,23 @@ async function findIssueForApproval(
     ORDER BY generated_at DESC
     LIMIT 1
   `) as IssueRow[];
+
+  return rows[0] ?? null;
+}
+
+async function findActiveSubscriberByEmail(
+  email: string
+): Promise<SubscriberRecipientRow | null> {
+  const rows = (await sql`
+    SELECT
+      id::text AS id,
+      unsubscribe_token::text AS unsubscribe_token
+    FROM subscribers
+    WHERE email = ${email}
+      AND confirmed_at IS NOT NULL
+      AND unsubscribed_at IS NULL
+    LIMIT 1
+  `) as SubscriberRecipientRow[];
 
   return rows[0] ?? null;
 }
@@ -195,6 +214,27 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  let recipientSubscriber: SubscriberRecipientRow | null;
+  try {
+    recipientSubscriber = await findActiveSubscriberByEmail(requestedRecipient);
+  } catch {
+    return NextResponse.json(
+      { ok: false, message: "Failed to resolve subscriber token for delivery." },
+      { status: 500 }
+    );
+  }
+
+  if (!recipientSubscriber) {
+    return NextResponse.json(
+      {
+        ok: false,
+        message:
+          "Recipient must be an active confirmed subscriber for tokenized archive access links.",
+      },
+      { status: 409 }
+    );
+  }
+
   const lockRows = (await sql`
     UPDATE issues
     SET
@@ -214,10 +254,17 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const issueData = parseIssueData(issue.stories_json, Number(issue.issue_number));
+    const deliveryHtml = renderIssueForSubscriber(
+      issueData,
+      issue.slug,
+      recipientSubscriber.unsubscribe_token
+    );
+
     const messageId = await sendEmail({
       to: requestedRecipient,
       subject: issue.subject_line,
-      html: issue.html_rendered,
+      html: deliveryHtml,
       tags: [
         { name: "flow", value: "weekly-pipeline" },
         { name: "action", value: "approved-send-self" },
@@ -249,7 +296,6 @@ export async function POST(request: NextRequest) {
     });
 
     try {
-      const issueData = parseIssueData(issue.stories_json, Number(issue.issue_number));
       const translatedCards = await generateTranslatedCards(issueData);
       await upsertWhatsAppCards(issue.id, Number(issue.issue_number), translatedCards);
       cardsGenerated = true;

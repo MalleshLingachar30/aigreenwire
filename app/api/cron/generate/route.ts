@@ -107,10 +107,8 @@ async function createDraftIssue(generated: IssueData, model: string): Promise<In
 
     const title = extractHeadline(sanitizedIssue.subject_line);
     const slug = buildIssueSlug(issueNumber, sanitizedIssue.subject_line);
-    const issuePath = `/issues/${slug}`;
     const htmlRendered = renderIssue(sanitizedIssue, {
       unsubscribeUrl: unsubscribePreviewUrl,
-      viewInBrowserUrl: buildAppUrl(issuePath),
     });
 
     try {
