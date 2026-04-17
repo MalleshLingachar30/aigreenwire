@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { UnsubscribeFooterLink } from "./unsubscribe-footer-link";
 
 type SearchParams = {
   status?: string;
@@ -89,12 +90,7 @@ export default async function UnsubscribePage({
 
         {unsubscribeHref && (status === "confirmed" || status === "already-confirmed") && (
           <footer className="mt-8 border-t border-green-100 pt-4">
-            <Link
-              href={unsubscribeHref}
-              className="text-xs text-green-600 underline transition hover:text-green-800"
-            >
-              Unsubscribe from The AI Green Wire
-            </Link>
+            <UnsubscribeFooterLink href={unsubscribeHref} />
           </footer>
         )}
       </div>
