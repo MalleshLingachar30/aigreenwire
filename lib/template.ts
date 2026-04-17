@@ -212,7 +212,7 @@ ${viewInBrowser}
       <td style="padding-left:14px;vertical-align:middle;">
         <div style="font-size:12px;color:#97C459;letter-spacing:1px;text-transform:uppercase;">From the editor</div>
         <div style="font-family:Georgia,serif;font-size:18px;font-style:italic;color:#EAF3DE;margin-top:2px;">Mallesh Lingachar</div>
-        <div style="font-size:11.5px;color:#C0DD97;margin-top:2px;">Director, Grobet India Agrotech & Certified Sandalwood Trainer</div>
+        <div style="font-size:11.5px;color:#C0DD97;margin-top:2px;">Executive Director - Grobet India Agrotech|AI Industry Speciallist | Certified Sandalwood Trainer| Ex Board Member-Institute of Agroforestry Farmers & Technologists| Associate - Global Green Growth</div>
       </td>
     </tr></table>
     <div style="font-size:13px;color:#C0DD97;margin-top:14px;line-height:1.65;font-style:italic;">

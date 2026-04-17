@@ -135,8 +135,9 @@ export default function LandingPage() {
         <p style={{ fontSize: 15, margin: '0 0 20px', lineHeight: 1.65, color: '#2C2C2A' }}>
           Every Monday morning, a two-page briefing lands in your inbox covering the week&apos;s most important
           developments in AI applied to farming, forestry and ecology {'— '}with special attention to India and Indian
-          growers. Written and edited by Mallesh Lingachar, Director of Grobet India Agrotech and a certified
-          sandalwood trainer.
+          growers. Written and edited by Mallesh Lingachar, Executive Director - Grobet India Agrotech|AI Industry
+          Speciallist | Certified Sandalwood Trainer| Ex Board Member-Institute of Agroforestry Farmers &
+          Technologists| Associate - Global Green Growth.
         </p>
         <p style={{ fontSize: 14, margin: '0 0 20px', lineHeight: 1.65, color: '#5F5E5A' }}>
           Free forever. No advertising. Unsubscribe in one click.
