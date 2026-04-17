@@ -258,7 +258,7 @@ function normalizeIssueData(input: unknown, issueNumber: number): IssueData {
 
 export async function generateIssue(issueNumber: number): Promise<IssueData> {
   const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-20250514",
+    model: "claude-sonnet-4-6-20250410",
     // Keep output budget under Sonnet 4 OTPM while preserving issue quality.
     max_tokens: 6000,
     tools: [
