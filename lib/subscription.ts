@@ -91,6 +91,24 @@ export function buildResubscribeReminderEmailHtml(
   ].join("");
 }
 
+export function buildUnsubscribeFarewellEmailHtml(
+  resubscribeUrl: string,
+  name?: string | null
+): string {
+  const greeting = name ? `Hi ${escapeHtml(name)},` : "Hi,";
+
+  return [
+    `<p>${greeting}</p>`,
+    "<p>Sorry to know you are leaving <strong>The AI Green Wire</strong>.</p>",
+    "<p>We believe staying informed about AI advancements in agriculture and ecology helps leaders make better decisions for the green sector.</p>",
+    "<p>If you change your mind, you can rejoin at any time:</p>",
+    `<p><a href=\"${resubscribeUrl}\" style=\"display:inline-block;padding:10px 16px;background:#047857;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;\">Subscribe again</a></p>`,
+    `<p>Or copy this URL into your browser:<br/><a href=\"${resubscribeUrl}\">${resubscribeUrl}</a></p>`,
+    "<p>Thank you for being part of the community.</p>",
+    "<p>— Mallesh Lingachar, Editor, The AI Green Wire</p>",
+  ].join("");
+}
+
 function escapeHtml(input: string): string {
   return input
     .replace(/&/g, "&amp;")

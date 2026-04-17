@@ -57,6 +57,8 @@ export default async function UnsubscribePage({
   const { title, message } = copyForStatus(status);
   const unsubscribeHref =
     token.length > 0 ? `/api/unsubscribe?token=${encodeURIComponent(token)}` : null;
+  const archiveHref =
+    token.length > 0 ? `/api/archive?token=${encodeURIComponent(token)}` : "/issues";
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-green-50 px-6 py-12">
@@ -75,7 +77,8 @@ export default async function UnsubscribePage({
 
         {(status === "confirmed" || status === "already-confirmed") && (
           <Link
-            href="/issues"
+            href={archiveHref}
+            prefetch={false}
             className="ml-3 mt-6 inline-flex rounded-lg border border-green-300 px-4 py-2 text-sm font-semibold text-green-800 transition hover:bg-green-100"
           >
             Browse subscriber archive

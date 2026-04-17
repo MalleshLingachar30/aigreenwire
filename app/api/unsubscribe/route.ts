@@ -1,10 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clearArchiveAccessCookie } from "@/lib/archive-access";
 import { sql } from "@/lib/db";
-import { buildAppUrl, isUuidToken } from "@/lib/subscription";
+import { sendEmail } from "@/lib/resend";
+import {
+  buildAppUrl,
+  buildUnsubscribeFarewellEmailHtml,
+  isUuidToken,
+  isValidEmail,
+  normalizeEmail,
+} from "@/lib/subscription";
 
 type SubscriberRow = {
   id: string;
+  email: string;
+  name: string | null;
   unsubscribed_at: string | null;
 };
 
@@ -34,6 +43,8 @@ export async function GET(request: NextRequest) {
     const rows = (await sql`
       SELECT
         id::text AS id,
+        email,
+        name,
         unsubscribed_at::text AS unsubscribed_at
       FROM subscribers
       WHERE unsubscribe_token = ${token}
@@ -56,6 +67,22 @@ export async function GET(request: NextRequest) {
       SET unsubscribed_at = NOW()
       WHERE id = ${subscriber.id}
     `;
+
+    const email = normalizeEmail(subscriber.email);
+    if (isValidEmail(email)) {
+      const resubscribeUrl = buildAppUrl("/");
+      void sendEmail({
+        to: email,
+        subject: "You are unsubscribed from The AI Green Wire",
+        html: buildUnsubscribeFarewellEmailHtml(resubscribeUrl, subscriber.name),
+        tags: [
+          { name: "flow", value: "subscriber-lifecycle" },
+          { name: "action", value: "unsubscribe-farewell" },
+        ],
+      }).catch((error) => {
+        console.error("Failed to send unsubscribe farewell email", error);
+      });
+    }
 
     return redirectToUnsubscribe("unsubscribed", { clearArchiveCookie: true });
   } catch {
