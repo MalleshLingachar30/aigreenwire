@@ -36,7 +36,7 @@ Your task: use the web_search tool to find the most important developments from 
 3. Opportunities for Indian students and researchers (PhDs, postdocs, challenges)
 
 Hard budget rule: this run must stay compact to avoid rate limits.
-- Use web_search at most 3 times total
+- Use at most 4 broad web_search queries total
 - Prefer one strong source per story (max 2 only when essential)
 - Keep every sentence factual and concise
 
@@ -259,12 +259,13 @@ function normalizeIssueData(input: unknown, issueNumber: number): IssueData {
 export async function generateIssue(issueNumber: number): Promise<IssueData> {
   const response = await anthropic.messages.create({
     model: "claude-sonnet-4-20250514",
-    // Keep requested output tokens deliberately low to stay under TPM limits.
-    max_tokens: 3200,
+    // Keep output budget under Sonnet 4 OTPM while preserving issue quality.
+    max_tokens: 6000,
     tools: [
       {
         type: "web_search_20250305",
         name: "web_search",
+        max_uses: 4,
       } as any,
     ],
     messages: [
