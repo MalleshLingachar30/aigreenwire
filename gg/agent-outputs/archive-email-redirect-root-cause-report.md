@@ -1,162 +1,182 @@
-# Archive And Email Redirect Investigation
+# Archive Redirect Root Cause Report
 
-Scope: `aigreenwire/` on `main` at `121c931` (`fix: use request header instead of redirect for archive token passthrough`).
+Scope:
+- Repo: `aigreenwire/`
+- Branch: `main`
+- Production commit under investigation: `2587d44`
+- Date: `2026-04-17`
 
-## Summary
+Question:
+- Confirm or reject the stronger hypothesis that the confirmation page is rendering a mutating `/api/unsubscribe?token=...` route via `next/link`, production prefetch executes it, `unsubscribed_at` flips, and the later archive request fails through the zero-row branch in `lib/archive-access.ts`.
 
-There are two different redirect problems in play:
+## Verdict
 
-1. The reported mobile "tap archive, bounce back to landing page" loop is exactly explained by the pre-`121c931` archive middleware behavior. Older code redirected `/issues?token=...` to clean `/issues` after setting a cookie, and that fails in in-app/email browsers that drop cookies on redirect responses.
-2. On current `main`, that confirmation-path bug is already addressed, but the issue-email "view in browser" path is still broken by design because it links to `/issues/[slug]` with no token. A fresh mobile/email browser with no archive cookie hits the archive guard and is redirected to `/?archive=subscribe`.
+Confirmed.
 
-The screenshot context points at the post-confirmation subscription screen, but the exact UI in the screenshot does not fully match current `main`, so production may be behind `main` or the screenshot may be from an older build.
+The exact failing production source path is:
+1. `/api/confirm?token=<confirm_token>` redirects to `/unsubscribe?status=confirmed|already-confirmed&token=<unsubscribe_token>` and sets the archive cookie.
+2. That `/unsubscribe` page renders a visible `next/link` to the mutating route `/api/unsubscribe?token=<unsubscribe_token>`.
+3. In production, App Router prefetch can execute that GET route.
+4. `app/api/unsubscribe/route.ts` mutates the subscriber row by setting `unsubscribed_at = NOW()`.
+5. The later archive request to `/issues?token=<unsubscribe_token>` reaches `requireArchiveAccess(queryToken)` with a valid token, but the database check returns zero rows because `unsubscribed_at` is no longer null.
+6. The redirect that actually explains the observed production behavior is therefore the **zero-row branch** in `lib/archive-access.ts`, not the missing-token branch.
 
-## Screenshot Context
+## Exact Call Chain In Source
 
-The attached screenshot is clearly the post-confirmation subscription-management screen:
+### 1. Confirmation route produces the archive token and lands on the confirmed page
 
-- Current `main` renders that screen from `app/unsubscribe/page.tsx` when `status` is `confirmed` or `already-confirmed`.
-- The screen title `Subscription confirmed` matches [app/unsubscribe/page.tsx](/Users/mallesh/code/AIgreenwire/aigreenwire/app/unsubscribe/page.tsx:12).
-- The archive CTA on current `main` is `Browse subscriber archive`, generated at [app/unsubscribe/page.tsx](/Users/mallesh/code/AIgreenwire/aigreenwire/app/unsubscribe/page.tsx:61) and [app/unsubscribe/page.tsx](/Users/mallesh/code/AIgreenwire/aigreenwire/app/unsubscribe/page.tsx:72).
+Entry:
+- `/api/confirm?token=<confirm_token>`
 
-Important mismatch:
+Execution order:
+1. [app/api/confirm/route.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/app/api/confirm/route.ts:40) reads `request.nextUrl.searchParams.get("token")`.
+2. It looks up the subscriber by `confirm_token`:
+   - [app/api/confirm/route.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/app/api/confirm/route.ts:48)
+3. It builds a redirect to `/unsubscribe?status=...&token=<unsubscribe_token>`:
+   - [app/api/confirm/route.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/app/api/confirm/route.ts:20)
+   - [app/api/confirm/route.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/app/api/confirm/route.ts:24)
+   - [app/api/confirm/route.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/app/api/confirm/route.ts:27)
+4. It sets the archive cookie on that redirect response:
+   - [app/api/confirm/route.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/app/api/confirm/route.ts:31)
+   - [app/api/confirm/route.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/app/api/confirm/route.ts:33)
+5. It returns either the `already-confirmed` redirect or the `confirmed` redirect:
+   - [app/api/confirm/route.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/app/api/confirm/route.ts:66)
+   - [app/api/confirm/route.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/app/api/confirm/route.ts:104)
 
-- The screenshot shows an `Unsubscribe now` button.
-- Current `main` does not render that button; it renders a footer text link instead at [app/unsubscribe/page.tsx](/Users/mallesh/code/AIgreenwire/aigreenwire/app/unsubscribe/page.tsx:90).
+### 2. The confirmed page renders a mutating unsubscribe route via `next/link`
 
-That mismatch matters because it strongly suggests the reported production behavior may have been captured on code older than current `main`.
+Entry:
+- `/unsubscribe?status=confirmed|already-confirmed&token=<unsubscribe_token>`
 
-## Exact Route And Guard Chain
+Execution order:
+1. [app/unsubscribe/page.tsx](/Users/mallesh/code/AIgreenwire/aigreenwire/app/unsubscribe/page.tsx:54) resolves `searchParams`.
+2. It computes `unsubscribeHref` as `/api/unsubscribe?token=<unsubscribe_token>`:
+   - [app/unsubscribe/page.tsx](/Users/mallesh/code/AIgreenwire/aigreenwire/app/unsubscribe/page.tsx:58)
+3. For `confirmed` and `already-confirmed` status, it renders the footer link with `next/link`:
+   - [app/unsubscribe/page.tsx](/Users/mallesh/code/AIgreenwire/aigreenwire/app/unsubscribe/page.tsx:90)
+   - [app/unsubscribe/page.tsx](/Users/mallesh/code/AIgreenwire/aigreenwire/app/unsubscribe/page.tsx:92)
 
-### 1. Confirmation flow route chain
+Important:
+- This is not a harmless read-only URL.
+- It is a mutating GET route handler.
 
-1. User clicks email confirmation link: `/api/confirm?token=<confirm_token>`.
-2. [app/api/confirm/route.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/app/api/confirm/route.ts:20) redirects to `/unsubscribe?status=confirmed&token=<unsubscribe_token>`.
-3. That same handler also sets the archive cookie with the subscriber's `unsubscribe_token` at [app/api/confirm/route.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/app/api/confirm/route.ts:33) and [app/api/confirm/route.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/app/api/confirm/route.ts:104).
-4. The confirmation page builds the archive CTA as `/issues?token=<unsubscribe_token>` at [app/unsubscribe/page.tsx](/Users/mallesh/code/AIgreenwire/aigreenwire/app/unsubscribe/page.tsx:61).
-5. `/issues` and `/issues/[slug]` are protected by [app/issues/layout.tsx](/Users/mallesh/code/AIgreenwire/aigreenwire/app/issues/layout.tsx:9), which calls `requireArchiveAccess()`.
-6. `requireArchiveAccess()` redirects to `/?archive=subscribe` if no valid token is available or if the token is not an active confirmed subscriber, at [lib/archive-access.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/lib/archive-access.ts:43) through [lib/archive-access.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/lib/archive-access.ts:60).
+### 3. The prefetched GET route mutates the subscriber row
 
-### 2. Current archive authorization behavior
+Entry:
+- `/api/unsubscribe?token=<unsubscribe_token>`
 
-On current `main`, the middleware no longer depends on a redirect to strip `?token=`:
+Execution order:
+1. [app/api/unsubscribe/route.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/app/api/unsubscribe/route.ts:26) runs on GET.
+2. It reads `request.nextUrl.searchParams.get("token")`:
+   - [app/api/unsubscribe/route.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/app/api/unsubscribe/route.ts:27)
+3. It validates the UUID token:
+   - [app/api/unsubscribe/route.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/app/api/unsubscribe/route.ts:29)
+4. It looks up the subscriber by `unsubscribe_token`:
+   - [app/api/unsubscribe/route.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/app/api/unsubscribe/route.ts:34)
+5. If the row exists and is not yet unsubscribed, it mutates production state:
+   - `UPDATE subscribers SET unsubscribed_at = NOW() WHERE id = ${subscriber.id}`
+   - [app/api/unsubscribe/route.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/app/api/unsubscribe/route.ts:54)
+6. It redirects back to `/unsubscribe?status=unsubscribed` and clears the archive cookie:
+   - [app/api/unsubscribe/route.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/app/api/unsubscribe/route.ts:60)
+   - [app/api/unsubscribe/route.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/app/api/unsubscribe/route.ts:19)
 
-- [middleware.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/middleware.ts:21) reads `token` from the query string.
-- If valid, it forwards the token as `x-archive-token` and also sets the cookie on the same response at [middleware.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/middleware.ts:26) through [middleware.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/middleware.ts:44).
-- `requireArchiveAccess()` first reads `x-archive-token`, then falls back to the cookie at [lib/archive-access.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/lib/archive-access.ts:24) through [lib/archive-access.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/lib/archive-access.ts:38).
+This is the mutating step that poisons the later archive attempt.
 
-This means the confirmation-page CTA should work on current `main` even if redirect-set cookies are dropped by an in-app browser, because the first archive request can now authorize from the request header alone.
+## Exact Archive Failure Path After The Mutation
 
-## Root Cause 1: Old Confirmation-CTA Loop On Mobile/In-App Browsers
+Entry:
+- `/issues?token=<same unsubscribe_token>`
+- This same failure also explains the confirmation CTA path, because that CTA targets `/issues?token=<unsubscribe_token>`:
+  - [app/unsubscribe/page.tsx](/Users/mallesh/code/AIgreenwire/aigreenwire/app/unsubscribe/page.tsx:61)
+  - [app/unsubscribe/page.tsx](/Users/mallesh/code/AIgreenwire/aigreenwire/app/unsubscribe/page.tsx:72)
 
-This is the exact historical bug that explains the reported loop:
+Execution order:
+1. [middleware.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/middleware.ts:15) matches `/issues`.
+2. It sees the valid `?token=` and sets the `aigw_archive_access` cookie on the response:
+   - [middleware.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/middleware.ts:21)
+3. App Router continues through:
+   - [app/layout.tsx](/Users/mallesh/code/AIgreenwire/aigreenwire/app/layout.tsx:10)
+   - [app/issues/layout.tsx](/Users/mallesh/code/AIgreenwire/aigreenwire/app/issues/layout.tsx:3)
+   - [app/issues/page.tsx](/Users/mallesh/code/AIgreenwire/aigreenwire/app/issues/page.tsx:24)
+4. `IssuesPage()` reads `searchParams.token` and calls:
+   - `requireArchiveAccess(queryToken ?? null)`
+   - [app/issues/page.tsx](/Users/mallesh/code/AIgreenwire/aigreenwire/app/issues/page.tsx:29)
+5. `requireArchiveAccess()` resolves the token:
+   - [lib/archive-access.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/lib/archive-access.ts:25)
+   - [lib/archive-access.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/lib/archive-access.ts:17)
+   - [lib/archive-token.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/lib/archive-token.ts:3)
+6. The token is valid, so this is **not** the missing-token redirect path.
+7. `requireArchiveAccess()` then checks the subscriber row with:
+   - `WHERE unsubscribe_token = ${archiveAccessToken}`
+   - `AND confirmed_at IS NOT NULL`
+   - `AND unsubscribed_at IS NULL`
+   - [lib/archive-access.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/lib/archive-access.ts:34)
+8. Because step 3 already set `unsubscribed_at = NOW()`, this query returns zero rows.
+9. The actual redirect that explains production behavior is:
+   - `redirect("/?archive=subscribe")`
+   - [lib/archive-access.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/lib/archive-access.ts:43)
 
-- Before `121c931`, `middleware.ts` redirected `/issues?token=<uuid>` to `/issues` after setting the cookie.
-- The previous code path was:
-  - middleware saw `?token=...`
-  - middleware set `aigw_archive_access`
-  - middleware returned `NextResponse.redirect(cleanUrl)`
-  - browser followed to `/issues`
-  - `requireArchiveAccess()` only checked cookies
-  - if the browser discarded cookies from redirect responses, `requireArchiveAccess()` redirected to `/?archive=subscribe`
+That is the exact failing branch.
 
-That is exactly the "tap archive and land back on homepage/landing" loop.
+## Evidence That The Mutation Really Happened
 
-Evidence from the immediate parent of `121c931`:
+Read-only checks performed during this investigation:
 
-- old `middleware.ts` redirected to a clean URL after setting the cookie
-- old `lib/archive-access.ts` only read cookies, not headers
+1. The confirmed-page footer does render the mutating route as `next/link`.
+- Source confirmed at:
+  - [app/unsubscribe/page.tsx](/Users/mallesh/code/AIgreenwire/aigreenwire/app/unsubscribe/page.tsx:90)
 
-So if production is still showing the screenshoted confirmation-page behavior, the first thing to verify is whether the deployed site actually includes `121c931` or newer.
+2. The GET unsubscribe route really does mutate on first hit.
+- Source confirmed at:
+  - [app/api/unsubscribe/route.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/app/api/unsubscribe/route.ts:54)
 
-## Root Cause 2: Current-Main Issue Email / Browser-View Path Still Breaks
+3. The live production token from the earlier verification artifact now has `unsubscribed_at` set in the database.
+- I re-queried the row read-only using the archive token from `gg/agent-outputs/production-archive-postship-verification-2587d44-2026-04-17.md`.
+- Result:
+  - `confirmed_at` is non-null
+  - `unsubscribed_at` is now non-null
 
-This is the bug I can prove still exists on current `main`.
+4. Production now returns the archive redirect for that same token.
+- `curl` to `https://aigreenwire.com/issues?token=<same live token>` now returns:
+  - HTTP `307`
+  - `location: /?archive=subscribe`
 
-### Broken route chain
+Those facts line up exactly with the zero-row branch in `lib/archive-access.ts`.
 
-1. Weekly issue HTML includes a `View this issue in your browser` link from [lib/template.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/lib/template.ts:97).
-2. That URL is injected during issue generation as a bare issue path, with no subscriber token, at [app/api/cron/generate/route.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/app/api/cron/generate/route.ts:110) through [app/api/cron/generate/route.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/app/api/cron/generate/route.ts:113).
-3. The resulting link is `/issues/<slug>`.
-4. `/issues/<slug>` goes through [app/issues/layout.tsx](/Users/mallesh/code/AIgreenwire/aigreenwire/app/issues/layout.tsx:9), which requires archive access.
-5. The middleware only helps when `?token=` is present, per [middleware.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/middleware.ts:22) through [middleware.ts](/Users/mallesh/code/AIgreenwire/aigreenwire/middleware.ts:45).
-6. A fresh mobile/email browser or attachment-preview context that has no existing `aigw_archive_access` cookie therefore reaches `requireArchiveAccess()` with neither header nor cookie, and is redirected to `/?archive=subscribe`.
+## Why This Is Stronger Than The Earlier Route-Cache Theory
 
-### Why this matches the reported "welcome email / attachment-related" symptom
+The earlier theory required a framework-level cache inference.
 
-- I found no dedicated attachment route in current `main`.
-- The only browser-view affordance embedded in outbound issue HTML is the tokenless `View this issue in your browser` link.
-- In practice, a user opening an issue from an email client, saved message, or attachment-like preview without a preexisting archive cookie would see exactly the same "back to landing page" result.
+This path does not.
 
-## Confidence / Limits
+It is fully explained by current source:
+- a visible `next/link`
+- pointing at a mutating GET route
+- whose handler updates `unsubscribed_at`
+- followed by archive authorization code that explicitly rejects unsubscribed rows
 
-What I can prove from current `main`:
+That is a much tighter and more direct explanation of the observed production behavior.
 
-- The issue-email/browser-view path is broken now.
-- Current `main` contains a fix specifically intended to solve the confirmation-page mobile/in-app redirect loop.
+## Minimum Clean Remediation Scope
 
-What I cannot prove from code alone:
+Minimum clean remediation:
 
-- That production is currently running `121c931` or newer.
-- That the exact screenshot was taken on the same build as current `main`.
+1. Stop rendering `/api/unsubscribe?token=...` with `next/link` on the confirmed page.
+- Use a plain `<a>` only if you truly want browser-default navigation semantics and no prefetch.
+- Better: make unsubscribe a POST-backed action instead of a mutating GET route.
 
-Because the screenshot UI does not exactly match current `main`, there is a real possibility that production is behind the current branch and the reporter is seeing the pre-`121c931` confirmation-flow bug.
+2. Do not expose mutating routes behind prefetched App Router links.
+- The current confirmed-page footer violates that rule directly.
 
-## Minimum Clean Fix Scope
+3. Keep the archive guard unchanged for this specific bug.
+- `lib/archive-access.ts` is behaving correctly once `unsubscribed_at` has been flipped.
+- The bug is upstream: the subscriber is being unsubscribed before the archive click.
 
-### Required
+## Exact Discrepancy From The Earlier Model
 
-1. Ensure production is deployed on `121c931` or newer.
+The earlier model assumed the archive redirect was being reused from a cached tokenless `/issues` result.
 
-Reason:
-
-- Without that deploy, the confirmation CTA can still loop on mobile/in-app browsers because the old redirect-based token stripping is fundamentally unreliable there.
-
-2. Stop emitting tokenless browser-view issue links.
-
-Reason:
-
-- `/issues/[slug]` is guarded.
-- The current newsletter/browser-view URL is generated without any token.
-- That path will keep redirecting fresh browsers to `/?archive=subscribe`.
-
-### Recommended implementation approach
-
-The cleanest fix is to make issue-email/browser-view URLs subscriber-aware and tokenized:
-
-- render issue email HTML per recipient at send time
-- generate `viewInBrowserUrl` as `/issues/<slug>?token=<subscriber.unsubscribe_token>`
-
-Why this is the minimum clean fix:
-
-- it reuses the existing archive-access model already used by the welcome email and confirmation flow
-- it works with the existing middleware/header guard
-- it avoids adding another redirect shim or another special-case access mechanism
-
-## Risks And Follow-Up Checks
-
-1. Current archive access uses `unsubscribe_token` as both unsubscribe credential and archive credential.
-
-Implication:
-
-- Forwarding a tokenized archive URL also forwards unsubscribe capability.
-- This is already true in the existing design, but the team should be aware of it before expanding tokenized links further.
-
-2. Internal archive links rely on the cookie after the first tokenized hit.
-
-Example:
-
-- [app/issues/[slug]/page.tsx](/Users/mallesh/code/AIgreenwire/aigreenwire/app/issues/[slug]/page.tsx:30) links back to bare `/issues`.
-
-Implication:
-
-- Once a tokenized issue URL is opened, the middleware must successfully set the cookie for later in-app navigation.
-- Current `main` should be much better here because it authorizes the first request from the header, but this is still worth testing on real mobile email clients.
-
-3. Production verification checklist after the fix
-
-- Confirm deployed production includes `121c931` or newer.
-- From a fresh iPhone/Android in-app browser, open a confirmation email and tap `Browse subscriber archive`.
-- From a fresh mobile email client, open the weekly issue email and tap `View this issue in your browser`.
-- Verify the resulting page is the archive or issue page, not `/?archive=subscribe`.
-- Inspect the rendered email HTML to ensure no bare `/issues` or `/issues/<slug>` links are still being emitted where first-touch access is expected.
+The stronger, source-proven discrepancy is:
+- the subscriber is already unsubscribed by the time `/issues?token=...` is requested,
+- so the redirect is produced by the **row-exists-but-is-now-unsubscribed** path,
+- not by any missing-token or prefetch-cache mismatch.
