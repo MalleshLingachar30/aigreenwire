@@ -1,4 +1,5 @@
 import type { IssueData, Story } from "./claude";
+import { sanitizeIssueData } from "@/lib/citation-sanitize";
 
 const LOGO_URL = 'https://aigreenwire.com/assets/grobet-logo.png';
 const PHOTO_URL = 'https://aigreenwire.com/assets/mallesh.jpg';
@@ -84,12 +85,13 @@ export function renderIssue(
   data: IssueData,
   opts: { unsubscribeUrl: string; viewInBrowserUrl?: string } = { unsubscribeUrl: "" }
 ): string {
+  const safeData = sanitizeIssueData(data);
   const today = new Date();
   const weekStr = weekRange(today);
 
-  const indiaStories = data.stories.filter((story) => story.section === "india");
-  const forestryStories = data.stories.filter((story) => story.section === "forestry");
-  const studentStories = data.stories.filter((story) => story.section === "students");
+  const indiaStories = safeData.stories.filter((story) => story.section === "india");
+  const forestryStories = safeData.stories.filter((story) => story.section === "forestry");
+  const studentStories = safeData.stories.filter((story) => story.section === "students");
   const variants: Array<"a" | "b" | "c" | "d"> = ["a", "b", "c", "d"];
 
   const viewInBrowser = opts.viewInBrowserUrl
@@ -103,7 +105,7 @@ export function renderIssue(
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>The AI Green Wire · Issue ${String(data.issue_number).padStart(2, "0")}</title>
+<title>The AI Green Wire · Issue ${String(safeData.issue_number).padStart(2, "0")}</title>
 </head>
 <body style="margin:0;padding:20px 0;background:#F1EFE8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
 ${viewInBrowser}
@@ -124,7 +126,7 @@ ${viewInBrowser}
       </div>
       <div style="display:table-cell;vertical-align:middle;text-align:right;">
         <span style="background:#639922;color:#EAF3DE;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:500;letter-spacing:0.5px;">Issue ${String(
-          data.issue_number
+          safeData.issue_number
         ).padStart(2, "0")}</span>
       </div>
     </div>
@@ -136,7 +138,7 @@ ${viewInBrowser}
   <div style="padding:24px 28px 20px;">
 
     <div style="font-size:15px;color:#173404;margin-bottom:22px;padding:16px 18px;background:#EAF3DE;border-radius:10px;border-left:3px solid #639922;line-height:1.65;">
-      ${data.greeting_blurb}
+      ${safeData.greeting_blurb}
     </div>
 
     <div style="display:table;width:100%;margin:26px 0 14px;">
@@ -173,18 +175,18 @@ ${viewInBrowser}
 
     <table cellpadding="0" cellspacing="0" border="0" style="width:100%;margin:16px 0 10px;">
       <tr>
-        <td style="width:50%;padding:0 5px 10px 0;">${data.stats[0] ? renderStatCard(data.stats[0], variants[0]) : ""}</td>
-        <td style="width:50%;padding:0 0 10px 5px;">${data.stats[1] ? renderStatCard(data.stats[1], variants[1]) : ""}</td>
+        <td style="width:50%;padding:0 5px 10px 0;">${safeData.stats[0] ? renderStatCard(safeData.stats[0], variants[0]) : ""}</td>
+        <td style="width:50%;padding:0 0 10px 5px;">${safeData.stats[1] ? renderStatCard(safeData.stats[1], variants[1]) : ""}</td>
       </tr>
       <tr>
-        <td style="width:50%;padding:0 5px 0 0;">${data.stats[2] ? renderStatCard(data.stats[2], variants[2]) : ""}</td>
-        <td style="width:50%;padding:0 0 0 5px;">${data.stats[3] ? renderStatCard(data.stats[3], variants[3]) : ""}</td>
+        <td style="width:50%;padding:0 5px 0 0;">${safeData.stats[2] ? renderStatCard(safeData.stats[2], variants[2]) : ""}</td>
+        <td style="width:50%;padding:0 0 0 5px;">${safeData.stats[3] ? renderStatCard(safeData.stats[3], variants[3]) : ""}</td>
       </tr>
     </table>
 
     <div style="background:#FAEEDA;border-radius:10px;padding:18px 20px;margin:22px 0;">
       <div style="font-size:11px;color:#854F0B;letter-spacing:1.5px;text-transform:uppercase;font-weight:500;margin-bottom:8px;">If you grow sandalwood, pay attention to this</div>
-      ${data.field_note
+      ${safeData.field_note
         .map(
           (paragraph) =>
             `<p style="font-size:14px;margin:0 0 10px;color:#412402;line-height:1.65;">${paragraph}</p>`

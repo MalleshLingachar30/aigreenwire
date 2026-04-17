@@ -73,6 +73,24 @@ export function buildConfirmEmailHtml(
   ].join("");
 }
 
+export function buildResubscribeReminderEmailHtml(
+  resubscribeUrl: string,
+  unsubscribeUrl: string,
+  name?: string | null
+): string {
+  const greeting = name ? `Hi ${escapeHtml(name)},` : "Hi,";
+
+  return [
+    `<p>${greeting}</p>`,
+    "<p>You previously unsubscribed from <strong>The AI Green Wire</strong>.</p>",
+    "<p>We send one reminder per week in case you want to join again.</p>",
+    `<p><a href=\"${resubscribeUrl}\" style=\"display:inline-block;padding:10px 16px;background:#047857;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;\">Resubscribe</a></p>`,
+    `<p>If the button does not work, copy this URL into your browser:<br/><a href=\"${resubscribeUrl}\">${resubscribeUrl}</a></p>`,
+    `<p>If you still prefer not to receive these reminders, you can stay unsubscribed here:<br/><a href=\"${unsubscribeUrl}\">${unsubscribeUrl}</a></p>`,
+    "<p>— Mallesh Lingachar, Editor, The AI Green Wire</p>",
+  ].join("");
+}
+
 function escapeHtml(input: string): string {
   return input
     .replace(/&/g, "&amp;")

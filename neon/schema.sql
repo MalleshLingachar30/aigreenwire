@@ -14,6 +14,7 @@ create table if not exists subscribers (
   confirmed_at      timestamptz,
   confirm_token     uuid default gen_random_uuid(),
   unsubscribed_at   timestamptz,
+  last_resubscribe_reminder_at timestamptz,
   unsubscribe_token uuid default gen_random_uuid(),
   metadata          jsonb default '{}'::jsonb
 );
@@ -23,6 +24,9 @@ create index if not exists idx_subscribers_confirmed
   where confirmed_at is not null and unsubscribed_at is null;
 
 create index if not exists idx_subscribers_email on subscribers(email);
+create index if not exists idx_subscribers_resubscribe_reminder
+  on subscribers(last_resubscribe_reminder_at)
+  where unsubscribed_at is not null;
 
 -- =========================================
 -- Issues (drafts and sent)

@@ -32,6 +32,12 @@ export default async function IssuesPage() {
           <p className="max-w-2xl text-sm leading-relaxed text-slate-700 md:text-base">
             Published issues from the weekly AI agriculture and ecology briefing for confirmed subscribers.
           </p>
+          <Link
+            href="/unsubscribe"
+            className="inline-flex text-sm font-medium text-emerald-800 underline underline-offset-2 hover:text-emerald-700"
+          >
+            Manage subscription or unsubscribe
+          </Link>
         </header>
 
         {issues.length === 0 ? (

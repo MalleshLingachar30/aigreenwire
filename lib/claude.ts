@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { sanitizeIssueData, stripCitationMarkup } from "@/lib/citation-sanitize";
 
 export const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
@@ -95,8 +96,14 @@ function normalizeIssueData(input: unknown, issueNumber: number): IssueData {
   }
 
   const data = input as Record<string, unknown>;
-  const subjectLine = typeof data.subject_line === "string" ? data.subject_line.trim() : "";
-  const greetingBlurb = typeof data.greeting_blurb === "string" ? data.greeting_blurb.trim() : "";
+  const subjectLine =
+    typeof data.subject_line === "string"
+      ? stripCitationMarkup(data.subject_line)
+      : "";
+  const greetingBlurb =
+    typeof data.greeting_blurb === "string"
+      ? stripCitationMarkup(data.greeting_blurb)
+      : "";
 
   if (!subjectLine) {
     throw new Error("Claude response is missing subject_line.");
@@ -121,8 +128,11 @@ function normalizeIssueData(input: unknown, issueNumber: number): IssueData {
       throw new Error(`stories[${index}].section is invalid.`);
     }
 
-    const tag = typeof raw.tag === "string" ? raw.tag.trim() : "";
-    const headline = typeof raw.headline === "string" ? raw.headline.trim() : "";
+    const tag = typeof raw.tag === "string" ? stripCitationMarkup(raw.tag) : "";
+    const headline =
+      typeof raw.headline === "string"
+        ? stripCitationMarkup(raw.headline)
+        : "";
     if (!tag || !headline) {
       throw new Error(`stories[${index}] is missing tag/headline.`);
     }
@@ -136,7 +146,7 @@ function normalizeIssueData(input: unknown, issueNumber: number): IssueData {
         if (typeof paragraph !== "string" || !paragraph.trim()) {
           throw new Error(`stories[${index}].paragraphs[${paragraphIndex}] is invalid.`);
         }
-        return paragraph.trim();
+        return stripCitationMarkup(paragraph);
       })
       .filter(Boolean);
 
@@ -150,7 +160,10 @@ function normalizeIssueData(input: unknown, issueNumber: number): IssueData {
       }
 
       const src = source as Record<string, unknown>;
-      const name = typeof src.name === "string" ? src.name.trim() : "";
+      const name =
+        typeof src.name === "string"
+          ? stripCitationMarkup(src.name)
+          : "";
       const url = typeof src.url === "string" ? src.url.trim() : "";
 
       if (!name || !url || !isHttpsUrl(url)) {
@@ -160,7 +173,10 @@ function normalizeIssueData(input: unknown, issueNumber: number): IssueData {
       return { name, url };
     });
 
-    const action = typeof raw.action === "string" && raw.action.trim() ? raw.action.trim() : undefined;
+    const action =
+      typeof raw.action === "string" && raw.action.trim()
+        ? stripCitationMarkup(raw.action)
+        : undefined;
 
     return {
       section,
@@ -192,9 +208,18 @@ function normalizeIssueData(input: unknown, issueNumber: number): IssueData {
     }
 
     const raw = stat as Record<string, unknown>;
-    const value = typeof raw.value === "string" ? raw.value.trim() : "";
-    const label = typeof raw.label === "string" ? raw.label.trim() : "";
-    const source_name = typeof raw.source_name === "string" ? raw.source_name.trim() : "";
+    const value =
+      typeof raw.value === "string"
+        ? stripCitationMarkup(raw.value)
+        : "";
+    const label =
+      typeof raw.label === "string"
+        ? stripCitationMarkup(raw.label)
+        : "";
+    const source_name =
+      typeof raw.source_name === "string"
+        ? stripCitationMarkup(raw.source_name)
+        : "";
     const source_url = typeof raw.source_url === "string" ? raw.source_url.trim() : "";
 
     if (!value || !label || !source_name || !isHttpsUrl(source_url)) {
@@ -212,17 +237,17 @@ function normalizeIssueData(input: unknown, issueNumber: number): IssueData {
     if (typeof paragraph !== "string" || !paragraph.trim()) {
       throw new Error(`field_note[${index}] is invalid.`);
     }
-    return paragraph.trim();
+    return stripCitationMarkup(paragraph);
   });
 
-  return {
+  return sanitizeIssueData({
     issue_number: issueNumber,
     subject_line: subjectLine,
     greeting_blurb: greetingBlurb,
     stories,
     stats,
     field_note,
-  };
+  });
 }
 
 export async function generateIssue(issueNumber: number): Promise<IssueData> {

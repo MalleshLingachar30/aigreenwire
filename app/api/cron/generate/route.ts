@@ -5,6 +5,7 @@ import { isCronRequestAuthorized } from "@/lib/api-auth";
 import { sendEmail } from "@/lib/resend";
 import { buildAppUrl, isValidEmail, normalizeEmail } from "@/lib/subscription";
 import { renderIssue } from "@/lib/template";
+import { sanitizeIssueData } from "@/lib/citation-sanitize";
 
 type MaxIssueNumberRow = {
   max_issue_number: number | string | null;
@@ -102,11 +103,12 @@ async function createDraftIssue(generated: IssueData, model: string): Promise<In
   for (let attempt = 0; attempt < MAX_INSERT_ATTEMPTS; attempt += 1) {
     const issueNumber = await getNextIssueNumber();
     generated.issue_number = issueNumber;
+    const sanitizedIssue = sanitizeIssueData(generated);
 
-    const title = extractHeadline(generated.subject_line);
-    const slug = buildIssueSlug(issueNumber, generated.subject_line);
+    const title = extractHeadline(sanitizedIssue.subject_line);
+    const slug = buildIssueSlug(issueNumber, sanitizedIssue.subject_line);
     const issuePath = `/issues/${slug}`;
-    const htmlRendered = renderIssue(generated, {
+    const htmlRendered = renderIssue(sanitizedIssue, {
       unsubscribeUrl: unsubscribePreviewUrl,
       viewInBrowserUrl: buildAppUrl(issuePath),
     });
@@ -128,9 +130,9 @@ async function createDraftIssue(generated: IssueData, model: string): Promise<In
           ${issueNumber},
           ${slug},
           ${title},
-          ${generated.subject_line},
-          ${generated.greeting_blurb},
-          ${JSON.stringify(generated)}::jsonb,
+          ${sanitizedIssue.subject_line},
+          ${sanitizedIssue.greeting_blurb},
+          ${JSON.stringify(sanitizedIssue)}::jsonb,
           ${htmlRendered},
           'draft',
           ${JSON.stringify({

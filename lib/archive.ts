@@ -1,5 +1,6 @@
 import type { IssueData, Story } from "@/lib/claude";
 import { sql } from "@/lib/db";
+import { stripCitationMarkup } from "@/lib/citation-sanitize";
 
 export type ArchiveIssue = {
   id: string;
@@ -38,7 +39,7 @@ function asText(value: unknown, maxLength: number): string | null {
     return null;
   }
 
-  const compact = value.trim();
+  const compact = stripCitationMarkup(value);
   if (!compact) {
     return null;
   }
@@ -248,7 +249,7 @@ function mapArchiveIssue(row: ArchiveIssueRow): ArchiveIssue | null {
     sentAt: row.sent_at,
     publishedAt,
     data: issueData,
-    htmlRendered: row.html_rendered,
+    htmlRendered: stripCitationMarkup(row.html_rendered),
   };
 }
 

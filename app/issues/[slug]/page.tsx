@@ -31,6 +31,10 @@ export default async function IssuePage({ params }: IssuePageProps) {
             Back to archive
           </Link>
           <span className="text-slate-500">|</span>
+          <Link href="/unsubscribe" className="text-[#3B6D11] hover:text-[#173404]">
+            Unsubscribe
+          </Link>
+          <span className="text-slate-500">|</span>
           <span className="text-slate-600">
             Published {formatArchiveDate(issue.publishedAt)}
           </span>

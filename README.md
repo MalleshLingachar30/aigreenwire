@@ -66,6 +66,7 @@ aigreenwire/
 │       ├── confirm/route.ts          # Double opt-in confirmation
 │       ├── unsubscribe/route.ts      # Unsubscribe handler
 │       ├── cron/generate/route.ts    # Monday 6 AM IST cron
+│       ├── cron/resubscribe-reminders/route.ts # Weekly reminder cron for unsubscribed users
 │       ├── admin/approve/route.ts    # Approve + send
 │       └── admin/issues/route.ts     # List drafts & issues
 ├── lib/
