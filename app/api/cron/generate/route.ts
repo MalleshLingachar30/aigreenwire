@@ -31,7 +31,7 @@ type InsertedDraft = {
 };
 
 const MAX_INSERT_ATTEMPTS = 3;
-const DEFAULT_MODEL = "claude-sonnet-4-20250514";
+const DEFAULT_MODEL = "claude-sonnet-4-6-20250410";
 
 function getEditorEmail(): string {
   const raw = process.env.EDITOR_EMAIL ?? "";
