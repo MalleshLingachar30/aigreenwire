@@ -55,6 +55,10 @@ export const LANGUAGE_CONFIG: Record<
 
 const LANGUAGE_LIST: Language[] = ["kn", "te", "ta", "hi"];
 const TRANSLATION_MODEL = "claude-sonnet-4-20250514";
+const CARD_HEADLINE_FALLBACK = "AI Green Wire Update";
+const CARD_SUMMARY_FALLBACK = "Latest agriculture and forestry AI update for Indian growers.";
+const CARD_ACTION_FALLBACK =
+  "Read the full update and discuss practical next steps with your local farming network.";
 
 type BaseCard = {
   cardNumber: 1 | 2 | 3;
@@ -88,9 +92,23 @@ function sanitizeLine(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
-function getFirstParagraph(story: Story): string {
-  const firstParagraph = story.paragraphs[0] ?? "";
-  return sanitizeLine(firstParagraph);
+function firstNonEmptyLine(lines: string[]): string {
+  for (const line of lines) {
+    const sanitized = sanitizeLine(line);
+    if (sanitized) {
+      return sanitized;
+    }
+  }
+
+  return "";
+}
+
+function getHeadline(story: Story): string {
+  return firstNonEmptyLine([story.headline]) || CARD_HEADLINE_FALLBACK;
+}
+
+function getSummary(story: Story): string {
+  return firstNonEmptyLine(story.paragraphs) || getHeadline(story) || CARD_SUMMARY_FALLBACK;
 }
 
 function getActionLine(story: Story): string {
@@ -98,7 +116,11 @@ function getActionLine(story: Story): string {
     return sanitizeLine(story.action);
   }
 
-  return "Read the full update and discuss practical next steps with your local farming network.";
+  return CARD_ACTION_FALLBACK;
+}
+
+function getTag(story: Story): string {
+  return firstNonEmptyLine([story.tag]) || story.section.toUpperCase();
 }
 
 export function isLanguage(value: string | null): value is Language {
@@ -134,9 +156,9 @@ function buildBaseCards(data: IssueData): BaseCard[] {
 
     return {
       cardNumber,
-      tag: sanitizeLine(story.tag),
-      headline: sanitizeLine(story.headline),
-      summary: getFirstParagraph(story),
+      tag: getTag(story),
+      headline: getHeadline(story),
+      summary: getSummary(story),
       actionText: getActionLine(story),
       sourceUrl: primarySource?.url?.trim() || null,
       sourceName: primarySource?.name?.trim() || null,
@@ -181,34 +203,28 @@ function parseTranslatedCards(payload: unknown, baseCards: BaseCard[]): Translat
   }
 
   const cards = (parsed as { cards?: unknown }).cards;
-  if (!Array.isArray(cards) || cards.length !== baseCards.length) {
-    throw new Error("Translated payload must contain 3 cards.");
+  if (!Array.isArray(cards)) {
+    throw new Error("Translated payload must include a cards array.");
   }
 
-  return cards.map((card, index) => {
-    if (!card || typeof card !== "object") {
-      throw new Error(`Translated card at index ${index} is invalid.`);
-    }
+  return baseCards.map((baseCard, index) => {
+    const card = cards[index];
+    const value = card && typeof card === "object" ? (card as Record<string, unknown>) : {};
 
-    const value = card as Record<string, unknown>;
-    const cardNumber = Number(value.cardNumber);
-    const expectedCardNumber = baseCards[index]!.cardNumber;
-    if (cardNumber !== expectedCardNumber) {
-      throw new Error(
-        `Translated card number mismatch at index ${index}: expected ${expectedCardNumber}, got ${cardNumber}.`
-      );
-    }
-
-    const headline = typeof value.headline === "string" ? sanitizeLine(value.headline) : "";
-    const summary = typeof value.summary === "string" ? sanitizeLine(value.summary) : "";
-    const actionText = typeof value.actionText === "string" ? sanitizeLine(value.actionText) : "";
+    const headline =
+      (typeof value.headline === "string" ? sanitizeLine(value.headline) : "") || baseCard.headline;
+    const summary =
+      (typeof value.summary === "string" ? sanitizeLine(value.summary) : "") || baseCard.summary;
+    const actionText =
+      (typeof value.actionText === "string" ? sanitizeLine(value.actionText) : "") ||
+      baseCard.actionText;
 
     if (!headline || !summary || !actionText) {
-      throw new Error(`Translated card at index ${index} has empty fields.`);
+      throw new Error(`Translated card at index ${index} has empty fields after fallback.`);
     }
 
     return {
-      cardNumber: expectedCardNumber,
+      cardNumber: baseCard.cardNumber,
       headline,
       summary,
       actionText,
