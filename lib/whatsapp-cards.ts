@@ -343,7 +343,7 @@ async function translateSingleCardForLanguage(
     try {
       const response = await anthropic.messages.create({
         model: TRANSLATION_MODEL,
-        max_tokens: 800,
+        max_tokens: 1600,
         tools: [
           {
             name: "store_single_translation",
