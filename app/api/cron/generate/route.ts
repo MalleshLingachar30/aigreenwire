@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateIssue, type IssueData } from "@/lib/claude";
+import {
+  generateIssue,
+  ISSUE_GENERATION_MODEL,
+  type IssueData,
+} from "@/lib/claude";
 import { sql } from "@/lib/db";
 import { isCronRequestAuthorized } from "@/lib/api-auth";
 import { sendEmail } from "@/lib/resend";
@@ -31,7 +35,7 @@ type InsertedDraft = {
 };
 
 const MAX_INSERT_ATTEMPTS = 3;
-const DEFAULT_MODEL = "claude-sonnet-4-6-20250410";
+const DEFAULT_MODEL = ISSUE_GENERATION_MODEL;
 
 function getEditorEmail(): string {
   const raw = process.env.EDITOR_EMAIL ?? "";

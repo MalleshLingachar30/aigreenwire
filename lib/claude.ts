@@ -5,6 +5,8 @@ export const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
 });
 
+export const ISSUE_GENERATION_MODEL = "claude-sonnet-4-6";
+
 export type Story = {
   section: "india" | "forestry" | "students";
   tag: string;
@@ -258,7 +260,7 @@ function normalizeIssueData(input: unknown, issueNumber: number): IssueData {
 
 export async function generateIssue(issueNumber: number): Promise<IssueData> {
   const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-6-20250410",
+    model: ISSUE_GENERATION_MODEL,
     // Keep output budget under Sonnet 4 OTPM while preserving issue quality.
     max_tokens: 6000,
     tools: [
