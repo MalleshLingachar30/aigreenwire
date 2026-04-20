@@ -13,7 +13,7 @@ type CardRow = {
   source_name: string | null;
 };
 
-type CardTheme = {
+export type CardTheme = {
   pageBackground: string;
   border: string;
   badgeBackground: string;
@@ -34,6 +34,18 @@ type RenderOptions = {
   issueNumber: number;
   language: Language;
   shareMeta?: ShareMeta;
+};
+
+export type LanguageCardPreview = {
+  issueNumber: number;
+  language: Language;
+  cardNumber: 1 | 2 | 3;
+  headline: string;
+  summary: string;
+  actionText: string;
+  tag: string;
+  sourceName: string;
+  theme: CardTheme;
 };
 
 const CARD_THEMES: Record<1 | 2 | 3, CardTheme> = {
@@ -138,10 +150,23 @@ function buildShareMetaTags(options: {
   ].join("\n  ");
 }
 
-export async function renderLanguageCardsReaderResponse(
-  options: RenderOptions
-): Promise<Response> {
-  const rows = (await sql`
+function normalizeCardNumber(value: number): 1 | 2 | 3 {
+  if (value === 2) {
+    return 2;
+  }
+
+  if (value === 3) {
+    return 3;
+  }
+
+  return 1;
+}
+
+async function loadLanguageCards(
+  issueNumber: number,
+  language: Language
+): Promise<CardRow[]> {
+  return (await sql`
     SELECT
       issue_number,
       language,
@@ -153,10 +178,42 @@ export async function renderLanguageCardsReaderResponse(
       source_url,
       source_name
     FROM whatsapp_cards
-    WHERE issue_number = ${options.issueNumber}
-      AND language = ${options.language}
+    WHERE issue_number = ${issueNumber}
+      AND language = ${language}
     ORDER BY card_number ASC
   `) as CardRow[];
+}
+
+export async function loadFirstLanguageCardPreview(
+  issueNumber: number,
+  language: Language
+): Promise<LanguageCardPreview | null> {
+  const rows = await loadLanguageCards(issueNumber, language);
+  const firstCard = rows[0];
+
+  if (!firstCard) {
+    return null;
+  }
+
+  const cardNumber = normalizeCardNumber(firstCard.card_number);
+
+  return {
+    issueNumber: firstCard.issue_number,
+    language: firstCard.language,
+    cardNumber,
+    headline: firstCard.headline,
+    summary: firstCard.summary,
+    actionText: firstCard.action_text,
+    tag: firstCard.tag?.trim() ? firstCard.tag : "AI GREEN WIRE",
+    sourceName: firstCard.source_name?.trim() || "AI Green Wire Desk",
+    theme: CARD_THEMES[cardNumber],
+  };
+}
+
+export async function renderLanguageCardsReaderResponse(
+  options: RenderOptions
+): Promise<Response> {
+  const rows = await loadLanguageCards(options.issueNumber, options.language);
 
   if (rows.length === 0) {
     return new Response("No WhatsApp cards found for this issue and language.", { status: 404 });
@@ -179,7 +236,7 @@ export async function renderLanguageCardsReaderResponse(
 
   const cardHtml = rows
     .map((card) => {
-      const cardNumber = card.card_number === 2 ? 2 : card.card_number === 3 ? 3 : 1;
+      const cardNumber = normalizeCardNumber(card.card_number);
       const theme = CARD_THEMES[cardNumber];
       const tag = card.tag?.trim() ? card.tag : "AI GREEN WIRE";
       const sourceName = card.source_name?.trim() || "AI Green Wire Desk";
