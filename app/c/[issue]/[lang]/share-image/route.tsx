@@ -85,7 +85,7 @@ export async function GET(
           {
             name: languageFontFamily,
             data: await loadFontFromFile(
-              path.join(process.cwd(), "public/fonts/akshar-regular-unicode-kannada-font.ttf")
+              path.join(process.cwd(), "public/fonts/NotoSansKannada-Regular.otf")
             ),
             weight: 400 as const,
             style: "normal" as const,
