@@ -5,7 +5,7 @@ import {
 } from "@/lib/cards-language-reader";
 import { LANGUAGE_CONFIG, isLanguage } from "@/lib/whatsapp-cards";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 type RouteParams = {
   issue: string;
@@ -30,6 +30,14 @@ export async function GET(
 
   const languageMeta = LANGUAGE_CONFIG[lang];
   const issueLabel = String(issueNumber).padStart(2, "0");
+  const headlinePreview =
+    firstCard.headline.length > 110
+      ? `${firstCard.headline.slice(0, 107).trimEnd()}...`
+      : firstCard.headline;
+  const summaryPreview =
+    firstCard.summary.length > 180
+      ? `${firstCard.summary.slice(0, 177).trimEnd()}...`
+      : firstCard.summary;
 
   return new ImageResponse(
     (
@@ -39,7 +47,6 @@ export async function GET(
           height: "630px",
           display: "flex",
           alignItems: "stretch",
-          justifyContent: "space-between",
           background:
             "linear-gradient(135deg, rgba(15,118,110,0.95) 0%, rgba(14,116,144,0.92) 60%, rgba(12,74,110,0.94) 100%)",
           color: "#f8fafc",
@@ -51,16 +58,21 @@ export async function GET(
         <div
           style={{
             display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
+            flex: 1,
             gap: "28px",
           }}
         >
-          <div style={{ display: "flex", flexDirection: "column", gap: "14px", maxWidth: "470px" }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              width: "470px",
+              gap: "14px",
+            }}
+          >
             <div
               style={{
-                display: "inline-flex",
-                width: "fit-content",
+                display: "flex",
                 fontSize: 24,
                 fontWeight: 700,
                 letterSpacing: 1,
@@ -68,6 +80,7 @@ export async function GET(
                 border: "2px solid rgba(240,253,250,0.65)",
                 borderRadius: 999,
                 padding: "10px 18px",
+                alignSelf: "flex-start",
               }}
             >
               AI Green Wire
@@ -78,7 +91,7 @@ export async function GET(
             <div style={{ fontSize: 34, fontWeight: 600, opacity: 0.94 }}>
               Issue {issueLabel} · {languageMeta.nativeName}
             </div>
-            <div style={{ fontSize: 24, lineHeight: 1.4, opacity: 0.82, maxWidth: "430px" }}>
+            <div style={{ fontSize: 24, lineHeight: 1.4, opacity: 0.82 }}>
               Shareable 3-card mobile reader with a live preview from the first published card.
             </div>
           </div>
@@ -87,13 +100,10 @@ export async function GET(
               display: "flex",
               flexDirection: "column",
               width: "560px",
-              minHeight: "534px",
               background: firstCard.theme.pageBackground,
               border: `2px solid ${firstCard.theme.border}`,
               borderRadius: "28px",
-              padding: "28px 28px 0",
-              boxShadow: "0 32px 64px rgba(15, 23, 42, 0.26)",
-              overflow: "hidden",
+              padding: "28px",
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -122,9 +132,6 @@ export async function GET(
                   letterSpacing: 0.5,
                   textTransform: "uppercase",
                   maxWidth: "320px",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
                 }}
               >
                 {firstCard.tag}
@@ -157,11 +164,9 @@ export async function GET(
                   fontSize: 42,
                   fontWeight: 800,
                   lineHeight: 1.15,
-                  maxHeight: "198px",
-                  overflow: "hidden",
                 }}
               >
-                {firstCard.headline}
+                {headlinePreview}
               </div>
               <div
                 style={{
@@ -169,11 +174,9 @@ export async function GET(
                   fontSize: 24,
                   lineHeight: 1.45,
                   color: firstCard.theme.body,
-                  maxHeight: "104px",
-                  overflow: "hidden",
                 }}
               >
-                {firstCard.summary}
+                {summaryPreview}
               </div>
             </div>
             <div
@@ -181,12 +184,9 @@ export async function GET(
                 display: "flex",
                 marginTop: "26px",
                 padding: "18px 20px",
-                borderTopLeftRadius: "20px",
-                borderTopRightRadius: "20px",
+                borderRadius: "20px",
                 background: firstCard.theme.actionBackground,
-                borderTop: `1px solid ${firstCard.theme.actionBorder}`,
-                borderLeft: `1px solid ${firstCard.theme.actionBorder}`,
-                borderRight: `1px solid ${firstCard.theme.actionBorder}`,
+                border: `1px solid ${firstCard.theme.actionBorder}`,
                 color: firstCard.theme.badgeText,
                 fontSize: 18,
                 fontWeight: 700,
