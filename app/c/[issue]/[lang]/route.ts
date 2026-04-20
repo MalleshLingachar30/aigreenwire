@@ -1,4 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import {
+  parseIssueNumber,
+  renderLanguageCardsReaderResponse,
+} from "@/lib/cards-language-reader";
 import { isLanguage } from "@/lib/whatsapp-cards";
 
 type RouteParams = {
@@ -6,29 +10,27 @@ type RouteParams = {
   lang: string;
 };
 
-function parseIssue(value: string): number | null {
-  const issue = Number.parseInt(value, 10);
-  if (!Number.isFinite(issue) || issue <= 0) {
-    return null;
-  }
-
-  return issue;
-}
-
 export async function GET(
   request: NextRequest,
   context: { params: Promise<RouteParams> }
 ) {
   const { issue, lang } = await context.params;
-  const issueNumber = parseIssue(issue);
+  const issueNumber = parseIssueNumber(issue);
 
   if (!issueNumber || !isLanguage(lang)) {
     return new Response("Invalid short card URL.", { status: 404 });
   }
 
-  const redirectUrl = new URL("/api/cards/language", request.url);
-  redirectUrl.searchParams.set("issue", String(issueNumber));
-  redirectUrl.searchParams.set("lang", lang);
+  const shortUrl = new URL(`/c/${issueNumber}/${lang}`, request.url).toString();
+  const ogImageUrl = new URL(`/c/${issueNumber}/${lang}/share-image`, request.url).toString();
 
-  return NextResponse.redirect(redirectUrl, { status: 307 });
+  return renderLanguageCardsReaderResponse({
+    issueNumber,
+    language: lang,
+    shareMeta: {
+      canonicalUrl: shortUrl,
+      pageUrl: shortUrl,
+      ogImageUrl,
+    },
+  });
 }
