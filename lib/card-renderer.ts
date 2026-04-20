@@ -90,7 +90,7 @@ export function renderCardHTML(card: RenderableCard): string {
   const safeSummary = sanitizeCardText(card.summary);
   const safeActionText = sanitizeCardText(card.actionText);
   const sanitizedSourceName = card.sourceName ? sanitizeCardText(card.sourceName) : "";
-  const sourceName = sanitizedSourceName ? escapeHtml(sanitizedSourceName) : "AI Green Wire Desk";
+  const originalSourceName = sanitizedSourceName ? escapeHtml(sanitizedSourceName) : "Not listed";
   const sourceUrl = toRenderableSourceUrl(card.sourceUrl);
   const footerJustify = sourceUrl ? "space-between" : "flex-start";
   const readMoreCta = sourceUrl
@@ -155,7 +155,13 @@ export function renderCardHTML(card: RenderableCard): string {
 
     <footer style="margin-top:32px;padding-top:26px;border-top:3px solid ${theme.accentSoft};display:flex;align-items:flex-end;justify-content:${footerJustify};gap:20px;">
       <div style="font-size:24px;color:${theme.textDark};line-height:1.4;">
-        <div style="margin-bottom:8px;"><strong>${escapeHtml(languageMeta.sourceText)}:</strong> ${sourceName}</div>
+        <div style="display:inline-block;font-size:19px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:#ffffff;background:${theme.accent};padding:8px 14px;border-radius:999px;margin-bottom:12px;">
+          AI Green Wire Briefing
+        </div>
+        <div style="font-size:28px;font-weight:700;color:${theme.accent};margin-bottom:8px;">
+          Published by The AI Green Wire
+        </div>
+        <div style="font-size:23px;"><strong>Original source:</strong> ${originalSourceName}</div>
         <div style="font-size:22px;opacity:0.85;">aigreenwire.com</div>
       </div>
       ${readMoreCta}

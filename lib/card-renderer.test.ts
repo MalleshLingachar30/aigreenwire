@@ -54,3 +54,20 @@ test("renderCardHTML ignores invalid source URL protocols", () => {
   assert.doesNotMatch(html, /<a href="javascript:alert\(1\)"/);
   assert.doesNotMatch(html, /और पढ़ें/);
 });
+
+test("renderCardHTML shows AI Green Wire publisher and original source attribution separately", () => {
+  const html = renderCardHTML(baseCard);
+
+  assert.match(html, /AI Green Wire Briefing/);
+  assert.match(html, /Published by The AI Green Wire/);
+  assert.match(html, /Original source:<\/strong> Desk/);
+});
+
+test("renderCardHTML shows fallback text when original source is missing", () => {
+  const html = renderCardHTML({
+    ...baseCard,
+    sourceName: null,
+  });
+
+  assert.match(html, /Original source:<\/strong> Not listed/);
+});
