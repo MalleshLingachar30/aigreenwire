@@ -1,3 +1,4 @@
+import React from "react";
 import { ImageResponse } from "next/og";
 import {
   loadFirstLanguageCardPreview,
@@ -30,14 +31,14 @@ export async function GET(
 
   const languageMeta = LANGUAGE_CONFIG[lang];
   const issueLabel = String(issueNumber).padStart(2, "0");
-  const headlinePreview =
-    firstCard.headline.length > 110
-      ? `${firstCard.headline.slice(0, 107).trimEnd()}...`
-      : firstCard.headline;
-  const summaryPreview =
-    firstCard.summary.length > 180
-      ? `${firstCard.summary.slice(0, 177).trimEnd()}...`
-      : firstCard.summary;
+  const sanitizePreviewText = (value: string, maxLength: number) => {
+    const sanitized = value.replaceAll("₹", "INR ");
+    return sanitized.length > maxLength
+      ? `${sanitized.slice(0, maxLength - 3).trimEnd()}...`
+      : sanitized;
+  };
+  const headlinePreview = sanitizePreviewText(firstCard.headline, 110);
+  const summaryPreview = sanitizePreviewText(firstCard.summary, 180);
 
   return new ImageResponse(
     (
@@ -86,10 +87,10 @@ export async function GET(
               AI Green Wire
             </div>
             <div style={{ fontSize: 58, fontWeight: 800, lineHeight: 1.02 }}>
-              {languageMeta.name} Card Preview
+              {`${languageMeta.name} Card Preview`}
             </div>
-            <div style={{ fontSize: 34, fontWeight: 600, opacity: 0.94 }}>
-              Issue {issueLabel} · {languageMeta.nativeName}
+            <div style={{ display: "flex", fontSize: 34, fontWeight: 600, opacity: 0.94 }}>
+              {`Issue ${issueLabel} · ${languageMeta.nativeName}`}
             </div>
             <div style={{ fontSize: 24, lineHeight: 1.4, opacity: 0.82 }}>
               Shareable 3-card mobile reader with a live preview from the first published card.
@@ -117,7 +118,7 @@ export async function GET(
                   color: "#0f172a",
                 }}
               >
-                Card {firstCard.cardNumber}
+                {`Card ${firstCard.cardNumber}`}
               </div>
               <div
                 style={{
