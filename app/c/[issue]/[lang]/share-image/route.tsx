@@ -1,10 +1,16 @@
 import React from "react";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { ImageResponse } from "next/og";
 import {
   loadFirstLanguageCardPreview,
   parseIssueNumber,
 } from "@/lib/cards-language-reader";
-import { LANGUAGE_CONFIG, isLanguage } from "@/lib/whatsapp-cards";
+import {
+  LANGUAGE_CONFIG,
+  isLanguage,
+  type Language,
+} from "@/lib/whatsapp-cards";
 
 export const runtime = "nodejs";
 
@@ -12,6 +18,39 @@ type RouteParams = {
   issue: string;
   lang: string;
 };
+
+const FONT_CACHE = new Map<string, Promise<ArrayBuffer>>();
+
+async function loadFontFromFile(filePath: string): Promise<ArrayBuffer> {
+  const cached = FONT_CACHE.get(filePath);
+  if (cached) {
+    return cached;
+  }
+
+  const fontPromise = readFile(filePath).then((buffer) => {
+    const arrayBuffer = buffer.buffer.slice(
+      buffer.byteOffset,
+      buffer.byteOffset + buffer.byteLength
+    );
+    return arrayBuffer;
+  });
+
+  FONT_CACHE.set(filePath, fontPromise);
+  return fontPromise;
+}
+
+function getLanguageFontFamily(language: Language): string {
+  switch (language) {
+    case "kn":
+      return "Noto Sans Kannada";
+    case "te":
+      return "Noto Sans Telugu";
+    case "ta":
+      return "Noto Sans Tamil";
+    case "hi":
+      return "Noto Sans Devanagari";
+  }
+}
 
 export async function GET(
   _request: Request,
@@ -39,6 +78,20 @@ export async function GET(
   };
   const headlinePreview = sanitizePreviewText(firstCard.headline, 110);
   const summaryPreview = sanitizePreviewText(firstCard.summary, 180);
+  const languageFontFamily = getLanguageFontFamily(lang);
+  const fonts =
+    lang === "kn"
+      ? [
+          {
+            name: languageFontFamily,
+            data: await loadFontFromFile(
+              path.join(process.cwd(), "public/fonts/akshar-regular-unicode-kannada-font.ttf")
+            ),
+            weight: 400 as const,
+            style: "normal" as const,
+          },
+        ]
+      : undefined;
 
   return new ImageResponse(
     (
@@ -53,7 +106,10 @@ export async function GET(
           color: "#f8fafc",
           padding: "48px",
           gap: "34px",
-          fontFamily: "Noto Sans, Arial, sans-serif",
+          fontFamily:
+            lang === "kn"
+              ? `"${languageFontFamily}", Arial, sans-serif`
+              : `"Noto Sans", Arial, sans-serif`,
         }}
       >
         <div
@@ -199,6 +255,10 @@ export async function GET(
         </div>
       </div>
     ),
-    { width: 1200, height: 630 }
+    {
+      width: 1200,
+      height: 630,
+      fonts,
+    }
   );
 }
