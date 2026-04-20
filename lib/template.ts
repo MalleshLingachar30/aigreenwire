@@ -1,9 +1,9 @@
 import type { IssueData, Story } from "./claude";
 import { sanitizeIssueData } from "@/lib/citation-sanitize";
 
-const LOGO_URL = 'https://aigreenwire.com/assets/grobet-logo.png';
-const PHOTO_URL = 'https://aigreenwire.com/assets/mallesh.jpg';
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://aigreenwire.com";
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://aigreenwire.com").replace(/\/+$/, "");
+const LOGO_URL = `${SITE_URL}/assets/grobet-logo.png`;
+const PHOTO_URL = `${SITE_URL}/assets/mallesh.jpg`;
 
 function weekRange(d: Date): string {
   const start = new Date(d);
@@ -69,7 +69,7 @@ function renderLogoSlot(): string {
   return `
     <div style="width:40px;height:40px;border-radius:50%;background:#C0DD97;overflow:hidden;position:relative;text-align:center;line-height:40px;color:#173404;font-weight:500;font-size:14px;letter-spacing:1px;">
       GB
-      <img src="${LOGO_URL}" alt="Grow Better India" width="40" height="40" style="display:block;width:40px;height:40px;object-fit:cover;border-radius:50%;position:absolute;top:0;left:0;" onerror="this.style.display='none'" />
+      <img src="${LOGO_URL}" alt="Grow Better India" width="40" height="40" style="display:block;width:40px;height:40px;object-fit:cover;border-radius:50%;position:absolute;top:0;left:0;" />
     </div>`;
 }
 
@@ -77,7 +77,7 @@ function renderEditorSlot(): string {
   return `
     <div style="width:62px;height:62px;border-radius:50%;background:#C0DD97;border:3px solid #639922;overflow:hidden;position:relative;text-align:center;line-height:62px;color:#173404;font-weight:500;font-size:18px;">
       ML
-      <img src="${PHOTO_URL}" alt="Mallesh Lingachar" width="62" height="62" style="display:block;width:62px;height:62px;object-fit:cover;position:absolute;top:0;left:0;" onerror="this.style.display='none'" />
+      <img src="${PHOTO_URL}" alt="Mallesh Lingachar" width="62" height="62" style="display:block;width:62px;height:62px;object-fit:cover;position:absolute;top:0;left:0;" />
     </div>`;
 }
 
