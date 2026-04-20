@@ -243,13 +243,24 @@ function buildCardPreviewLinks(
   return links;
 }
 
+function buildCardLanguageLinks(issueNumber: number, siteUrl: string): Record<Language, string> {
+  return {
+    kn: `${siteUrl}/api/cards/language?issue=${issueNumber}&lang=kn`,
+    te: `${siteUrl}/api/cards/language?issue=${issueNumber}&lang=te`,
+    ta: `${siteUrl}/api/cards/language?issue=${issueNumber}&lang=ta`,
+    hi: `${siteUrl}/api/cards/language?issue=${issueNumber}&lang=hi`,
+  };
+}
+
 function buildCardsDeliveryEmailHtml(
   issue: IssueRow,
   linksByLanguage: Record<Language, string[]>,
+  languageLinksByLanguage: Record<Language, string>,
   galleryUrl: string
 ): string {
   const sections = LANGUAGE_SEQUENCE.map((language) => {
     const label = `${LANGUAGE_CONFIG[language].name} (${LANGUAGE_CONFIG[language].nativeName})`;
+    const languageUrl = languageLinksByLanguage[language];
     const links = linksByLanguage[language]
       .map(
         (url, index) =>
@@ -261,6 +272,9 @@ function buildCardsDeliveryEmailHtml(
 
     return `<section style="margin:16px 0 20px;">
       <h3 style="margin:0 0 8px;font-size:16px;color:#0f172a;">${escapeHtml(label)}</h3>
+      <p style="margin:0 0 10px;font-size:13px;color:#0f172a;"><strong>Shareable 3-card reader:</strong> <a href="${escapeHtml(
+        languageUrl
+      )}" style="color:#0f766e;text-decoration:none;">${escapeHtml(languageUrl)}</a></p>
       <ul style="margin:0;padding-left:18px;color:#0f172a;">${links}</ul>
     </section>`;
   }).join("");
@@ -432,7 +446,13 @@ export async function GET(request: NextRequest) {
         siteUrl,
         encodedPassword
       );
-      const cardsEmailHtml = buildCardsDeliveryEmailHtml(issue, linksByLanguage, cardsGalleryUrl);
+      const languageLinksByLanguage = buildCardLanguageLinks(Number(issue.issue_number), siteUrl);
+      const cardsEmailHtml = buildCardsDeliveryEmailHtml(
+        issue,
+        linksByLanguage,
+        languageLinksByLanguage,
+        cardsGalleryUrl
+      );
 
       await sendEmail({
         to: editorEmail,
