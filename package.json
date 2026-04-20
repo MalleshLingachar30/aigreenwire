@@ -10,9 +10,11 @@
     "verify:services": "tsx scripts/verify-services.ts"
   },
   "dependencies": {
+    "@sparticuz/chromium": "^138.0.2",
     "@anthropic-ai/sdk": "^0.20.9",
     "@neondatabase/serverless": "^1.0.2",
     "next": "15.5.15",
+    "puppeteer-core": "^24.11.1",
     "react": "^18",
     "react-dom": "^18",
     "resend": "^6.12.0"

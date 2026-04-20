@@ -1,8 +1,8 @@
 import React from "react";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { NextResponse } from "next/server";
 import { ImageResponse } from "next/og";
+import { loadPersistedSharePreview } from "@/lib/card-share-previews";
 import {
   loadFirstLanguageCardPreview,
   parseIssueNumber,
@@ -14,11 +14,6 @@ import {
 } from "@/lib/whatsapp-cards";
 
 export const runtime = "nodejs";
-
-// Kannada uses browser-rasterized share images to avoid next/og shaping issues.
-const PERSISTED_SHARE_IMAGE_ASSETS: Partial<Record<number, string>> = {
-  3: "/assets/card-share/issue-03-kn.png",
-};
 
 type RouteParams = {
   issue: string;
@@ -59,7 +54,7 @@ function getLanguageFontFamily(language: Language): string {
 }
 
 export async function GET(
-  request: Request,
+  _request: Request,
   context: { params: Promise<RouteParams> }
 ) {
   const { issue, lang } = await context.params;
@@ -70,9 +65,15 @@ export async function GET(
   }
 
   if (lang === "kn") {
-    const assetPath = PERSISTED_SHARE_IMAGE_ASSETS[issueNumber];
-    if (assetPath) {
-      return NextResponse.redirect(new URL(assetPath, request.url), { status: 307 });
+    const persistedPreview = await loadPersistedSharePreview(issueNumber, lang);
+    if (persistedPreview) {
+      return new Response(new Uint8Array(persistedPreview.imagePng), {
+        status: 200,
+        headers: {
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": persistedPreview.contentType,
+        },
+      });
     }
   }
 

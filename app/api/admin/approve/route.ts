@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { isAdminRequestAuthorized } from "@/lib/api-auth";
+import { generateAndStoreKannadaSharePreview } from "@/lib/card-share-previews";
 import { parseStoredIssueData } from "@/lib/citation-sanitize";
 import { sql } from "@/lib/db";
 import { renderIssueForSubscriber } from "@/lib/issue-email";
@@ -417,6 +418,23 @@ export async function GET(request: NextRequest) {
       await upsertWhatsAppCards(issue.id, Number(issue.issue_number), translatedCards);
       cardsGenerated = true;
       cardsCount = translatedCards.length;
+
+      try {
+        await generateAndStoreKannadaSharePreview({
+          issueId: issue.id,
+          issueNumber: Number(issue.issue_number),
+          origin: request.nextUrl.origin,
+        });
+      } catch (previewFailure) {
+        const message =
+          previewFailure instanceof Error
+            ? previewFailure.message
+            : "Kannada short-link preview generation failed.";
+        cardsError = cardsError
+          ? `${cardsError} Kannada preview warning: ${message}`
+          : `Kannada preview warning: ${message}`;
+        console.error("[cards] Kannada share preview generation failure:", previewFailure);
+      }
 
       const editorEmail = getEditorEmail();
       const linksByLanguage = buildCardPreviewLinks(
