@@ -30,6 +30,9 @@ export async function GET(
 
   const languageMeta = LANGUAGE_CONFIG[lang];
   const issueLabel = String(issueNumber).padStart(2, "0");
+  const headlineFontSize = lang === "kn" ? 42 : 48;
+  const cardFontFamily =
+    lang === "kn" ? "'Noto Sans Kannada', 'Noto Sans', Arial, sans-serif" : "Noto Sans, Arial, sans-serif";
 
   return new ImageResponse(
     (
@@ -38,13 +41,13 @@ export async function GET(
           width: "1200px",
           height: "630px",
           display: "flex",
-          alignItems: "stretch",
+          alignItems: "center",
           justifyContent: "space-between",
           background:
             "linear-gradient(135deg, rgba(15,118,110,0.95) 0%, rgba(14,116,144,0.92) 60%, rgba(12,74,110,0.94) 100%)",
           color: "#f8fafc",
-          padding: "48px",
-          gap: "34px",
+          padding: "54px",
+          gap: "28px",
           fontFamily: "Noto Sans, Arial, sans-serif",
         }}
       >
@@ -52,18 +55,28 @@ export async function GET(
           style={{
             display: "flex",
             justifyContent: "space-between",
-            alignItems: "flex-start",
+            alignItems: "center",
+            width: "100%",
             gap: "28px",
           }}
         >
-          <div style={{ display: "flex", flexDirection: "column", gap: "14px", maxWidth: "470px" }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignSelf: "flex-start",
+              gap: "16px",
+              width: "236px",
+              paddingTop: "18px",
+            }}
+          >
             <div
               style={{
                 display: "inline-flex",
                 width: "fit-content",
-                fontSize: 24,
+                fontSize: 23,
                 fontWeight: 700,
-                letterSpacing: 1,
+                letterSpacing: 0.9,
                 textTransform: "uppercase",
                 border: "2px solid rgba(240,253,250,0.65)",
                 borderRadius: 999,
@@ -72,35 +85,52 @@ export async function GET(
             >
               AI Green Wire
             </div>
-            <div style={{ fontSize: 58, fontWeight: 800, lineHeight: 1.02 }}>
-              {languageMeta.name} Card Preview
-            </div>
-            <div style={{ fontSize: 34, fontWeight: 600, opacity: 0.94 }}>
-              Issue {issueLabel} · {languageMeta.nativeName}
-            </div>
-            <div style={{ fontSize: 24, lineHeight: 1.4, opacity: 0.82, maxWidth: "430px" }}>
-              Shareable 3-card mobile reader with a live preview from the first published card.
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "6px",
+                paddingLeft: "2px",
+              }}
+            >
+              <div style={{ display: "flex", fontSize: 30, fontWeight: 700, lineHeight: 1.15 }}>
+                Issue {issueLabel}
+              </div>
+              <div style={{ display: "flex", fontSize: 22, fontWeight: 600, lineHeight: 1.2, opacity: 0.9 }}>
+                {languageMeta.name}
+              </div>
+              <div style={{ display: "flex", fontSize: 18, lineHeight: 1.3, opacity: 0.72 }}>
+                {languageMeta.nativeName}
+              </div>
             </div>
           </div>
           <div
             style={{
               display: "flex",
               flexDirection: "column",
-              width: "560px",
-              minHeight: "534px",
+              width: "782px",
+              minHeight: "514px",
               background: firstCard.theme.pageBackground,
               border: `2px solid ${firstCard.theme.border}`,
-              borderRadius: "28px",
-              padding: "28px 28px 0",
+              borderRadius: "32px",
+              padding: "34px 36px 32px",
               boxShadow: "0 32px 64px rgba(15, 23, 42, 0.26)",
               overflow: "hidden",
+              fontFamily: cardFontFamily,
             }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: "18px",
+              }}
+            >
               <div
                 style={{
                   display: "flex",
-                  fontSize: 20,
+                  fontSize: 21,
                   fontWeight: 700,
                   letterSpacing: 0.6,
                   textTransform: "uppercase",
@@ -112,16 +142,16 @@ export async function GET(
               <div
                 style={{
                   display: "flex",
-                  fontSize: 18,
+                  fontSize: 19,
                   fontWeight: 700,
                   lineHeight: 1,
                   background: firstCard.theme.badgeBackground,
                   color: firstCard.theme.badgeText,
-                  padding: "10px 14px",
+                  padding: "11px 16px",
                   borderRadius: "999px",
                   letterSpacing: 0.5,
                   textTransform: "uppercase",
-                  maxWidth: "320px",
+                  maxWidth: "360px",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
@@ -134,15 +164,15 @@ export async function GET(
               style={{
                 display: "flex",
                 flexDirection: "column",
-                gap: "18px",
-                marginTop: "22px",
+                gap: "22px",
+                marginTop: "28px",
                 color: firstCard.theme.heading,
               }}
             >
               <div
                 style={{
                   display: "flex",
-                  fontSize: 16,
+                  fontSize: 17,
                   fontWeight: 700,
                   letterSpacing: 0.8,
                   textTransform: "uppercase",
@@ -154,10 +184,10 @@ export async function GET(
               <div
                 style={{
                   display: "flex",
-                  fontSize: 42,
+                  fontSize: headlineFontSize,
                   fontWeight: 800,
-                  lineHeight: 1.15,
-                  maxHeight: "198px",
+                  lineHeight: 1.18,
+                  maxHeight: "206px",
                   overflow: "hidden",
                 }}
               >
@@ -166,34 +196,28 @@ export async function GET(
               <div
                 style={{
                   display: "flex",
-                  fontSize: 24,
-                  lineHeight: 1.45,
+                  fontSize: 20,
+                  lineHeight: 1.35,
                   color: firstCard.theme.body,
-                  maxHeight: "104px",
+                  opacity: 0.82,
+                  maxWidth: "520px",
+                  maxHeight: "32px",
                   overflow: "hidden",
                 }}
               >
-                {firstCard.summary}
+                {firstCard.sourceName}
               </div>
             </div>
             <div
               style={{
                 display: "flex",
-                marginTop: "26px",
-                padding: "18px 20px",
-                borderTopLeftRadius: "20px",
-                borderTopRightRadius: "20px",
-                background: firstCard.theme.actionBackground,
+                marginTop: "24px",
+                height: "150px",
+                width: "100%",
                 borderTop: `1px solid ${firstCard.theme.actionBorder}`,
-                borderLeft: `1px solid ${firstCard.theme.actionBorder}`,
-                borderRight: `1px solid ${firstCard.theme.actionBorder}`,
-                color: firstCard.theme.badgeText,
-                fontSize: 18,
-                fontWeight: 700,
+                background: `linear-gradient(180deg, rgba(255,255,255,0) 0%, ${firstCard.theme.actionBackground} 100%)`,
               }}
-            >
-              Open full reader
-            </div>
+            />
           </div>
         </div>
       </div>
