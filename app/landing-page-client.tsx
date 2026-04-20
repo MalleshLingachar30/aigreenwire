@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { isLandingAutoConfirmWindow } from '@/lib/subscription';
 
 const LANDING_LOGO_URL = '/assets/grobet-logo.png';
 
@@ -12,6 +13,7 @@ type LandingPageClientProps = {
 export default function LandingPageClient({
   initialArchivePrompt,
 }: LandingPageClientProps) {
+  const autoConfirmActive = isLandingAutoConfirmWindow();
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>(
@@ -19,7 +21,9 @@ export default function LandingPageClient({
   );
   const [message, setMessage] = useState(
     initialArchivePrompt
-      ? 'Subscribe first to access the archive. Then confirm your email in this browser.'
+      ? autoConfirmActive
+        ? 'Subscribe first to access the archive. You will get instant access in this browser.'
+        : 'Subscribe first to access the archive. Then confirm your email in this browser.'
       : ''
   );
   const [showLandingLogo, setShowLandingLogo] = useState(true);
@@ -35,13 +39,22 @@ export default function LandingPageClient({
       });
       const data = await res.json();
       if (res.ok) {
+        if (data?.status === 'auto_confirmed') {
+          const archiveUrl =
+            typeof data.archive_url === 'string' && data.archive_url.length > 0
+              ? data.archive_url
+              : '/issues';
+          window.location.assign(archiveUrl);
+          return;
+        }
+
         setStatus('success');
         setMessage(data.message || 'Check your inbox to confirm.');
         setEmail('');
         setName('');
       } else {
         setStatus('error');
-        setMessage(data.error || 'Something went wrong.');
+        setMessage(data.message || data.error || 'Something went wrong.');
       }
     } catch {
       setStatus('error');

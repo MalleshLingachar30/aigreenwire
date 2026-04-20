@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { setArchiveAccessCookie } from "@/lib/archive-access";
 import { sql } from "@/lib/db";
 import { sendEmail } from "@/lib/resend";
 import {
   buildAppUrl,
   buildConfirmEmailHtml,
+  buildWelcomeEmailHtml,
+  isLandingAutoConfirmWindow,
   isValidEmail,
   normalizeEmail,
   sanitizeName,
@@ -53,6 +56,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const shouldAutoConfirm = isLandingAutoConfirmWindow();
+
     const existingRows = (await sql`
       SELECT
         id::text AS id,
@@ -80,32 +85,72 @@ export async function POST(request: NextRequest) {
     let unsubscribeToken: string | null = null;
 
     if (existing) {
-      const updatedRows = (await sql`
-        UPDATE subscribers
-        SET
-          name = COALESCE(${name}, name),
-          source = 'landing-page',
-          subscribed_at = NOW(),
-          confirmed_at = NULL,
-          unsubscribed_at = NULL,
-          confirm_token = gen_random_uuid(),
-          unsubscribe_token = gen_random_uuid()
-        WHERE id = ${existing.id}
-        RETURNING
-          confirm_token::text AS confirm_token,
-          unsubscribe_token::text AS unsubscribe_token
-      `) as ConfirmTokenRow[];
+      const updatedRows = shouldAutoConfirm
+        ? ((await sql`
+            UPDATE subscribers
+            SET
+              name = COALESCE(${name}, name),
+              source = 'landing-page',
+              subscribed_at = NOW(),
+              confirmed_at = NOW(),
+              unsubscribed_at = NULL,
+              confirm_token = gen_random_uuid(),
+              unsubscribe_token = gen_random_uuid()
+            WHERE id = ${existing.id}
+            RETURNING
+              confirm_token::text AS confirm_token,
+              unsubscribe_token::text AS unsubscribe_token
+          `) as ConfirmTokenRow[])
+        : ((await sql`
+            UPDATE subscribers
+            SET
+              name = COALESCE(${name}, name),
+              source = 'landing-page',
+              subscribed_at = NOW(),
+              confirmed_at = NULL,
+              unsubscribed_at = NULL,
+              confirm_token = gen_random_uuid(),
+              unsubscribe_token = gen_random_uuid()
+            WHERE id = ${existing.id}
+            RETURNING
+              confirm_token::text AS confirm_token,
+              unsubscribe_token::text AS unsubscribe_token
+          `) as ConfirmTokenRow[]);
 
       confirmToken = updatedRows[0]?.confirm_token ?? null;
       unsubscribeToken = updatedRows[0]?.unsubscribe_token ?? null;
     } else {
-      const insertedRows = (await sql`
-        INSERT INTO subscribers (email, name, source)
-        VALUES (${email}, ${name}, 'landing-page')
-        RETURNING
-          confirm_token::text AS confirm_token,
-          unsubscribe_token::text AS unsubscribe_token
-      `) as ConfirmTokenRow[];
+      const insertedRows = shouldAutoConfirm
+        ? ((await sql`
+            INSERT INTO subscribers (
+              email,
+              name,
+              source,
+              confirmed_at,
+              unsubscribed_at,
+              confirm_token,
+              unsubscribe_token
+            )
+            VALUES (
+              ${email},
+              ${name},
+              'landing-page',
+              NOW(),
+              NULL,
+              gen_random_uuid(),
+              gen_random_uuid()
+            )
+            RETURNING
+              confirm_token::text AS confirm_token,
+              unsubscribe_token::text AS unsubscribe_token
+          `) as ConfirmTokenRow[])
+        : ((await sql`
+            INSERT INTO subscribers (email, name, source)
+            VALUES (${email}, ${name}, 'landing-page')
+            RETURNING
+              confirm_token::text AS confirm_token,
+              unsubscribe_token::text AS unsubscribe_token
+          `) as ConfirmTokenRow[]);
 
       confirmToken = insertedRows[0]?.confirm_token ?? null;
       unsubscribeToken = insertedRows[0]?.unsubscribe_token ?? null;
@@ -113,6 +158,39 @@ export async function POST(request: NextRequest) {
 
     if (!confirmToken || !unsubscribeToken) {
       throw new Error("Failed to issue subscription tokens.");
+    }
+
+    if (shouldAutoConfirm) {
+      const archiveUrl = buildAppUrl("/issues", { token: unsubscribeToken });
+      const archiveRedirectUrl = "/issues";
+      const unsubscribeUrl = buildAppUrl("/api/unsubscribe", {
+        token: unsubscribeToken,
+      });
+
+      sendEmail({
+        to: email,
+        subject: "Welcome to The AI Green Wire",
+        html: buildWelcomeEmailHtml(archiveUrl, unsubscribeUrl, name),
+        tags: [
+          { name: "flow", value: "april-landing-autoconfirm" },
+          { name: "action", value: "welcome" },
+        ],
+      }).catch(() => {
+        // Swallow to avoid blocking successful subscribe + archive access.
+      });
+
+      const response = NextResponse.json(
+        {
+          ok: true,
+          status: "auto_confirmed",
+          message: "You're subscribed. Opening the subscriber archive now.",
+          archive_url: archiveRedirectUrl,
+        },
+        { status: 200 }
+      );
+
+      setArchiveAccessCookie(response, unsubscribeToken);
+      return response;
     }
 
     const confirmUrl = buildAppUrl("/api/confirm", { token: confirmToken });

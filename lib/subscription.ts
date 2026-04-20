@@ -2,6 +2,9 @@ const DEFAULT_APP_URL = "https://aigreenwire.com";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const LANDING_AUTO_CONFIRM_CUTOFF_MS = Date.parse(
+  "2026-05-01T00:00:00+05:30"
+);
 
 export function normalizeEmail(raw: string): string {
   return raw.trim().toLowerCase();
@@ -27,6 +30,10 @@ export function sanitizeName(rawName: unknown): string | null {
 
 export function isUuidToken(token: string | null): token is string {
   return typeof token === "string" && UUID_PATTERN.test(token);
+}
+
+export function isLandingAutoConfirmWindow(nowMs: number = Date.now()): boolean {
+  return nowMs < LANDING_AUTO_CONFIRM_CUTOFF_MS;
 }
 
 export function getAppUrl(): string {
