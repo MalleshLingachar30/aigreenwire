@@ -38,7 +38,10 @@ test("renderCardHTML renders read-more anchor for valid source URL", () => {
     sourceUrl: "https://example.com/source",
   });
 
-  assert.match(html, /<a href="https:\/\/example\.com\/source"/);
+  assert.match(
+    html,
+    /<a href="https:\/\/example\.com\/source" target="_blank" rel="noopener noreferrer"/
+  );
   assert.match(html, /और पढ़ें/);
 });
 

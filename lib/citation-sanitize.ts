@@ -43,3 +43,29 @@ export function sanitizeIssueData(issue: IssueData): IssueData {
     field_note: issue.field_note.map((paragraph) => stripCitationMarkup(paragraph)),
   };
 }
+
+export function parseStoredIssueData(raw: unknown, issueNumber: number): IssueData {
+  let payload = raw;
+
+  if (typeof payload === "string") {
+    try {
+      payload = JSON.parse(payload);
+    } catch {
+      throw new Error("stories_json contains invalid JSON.");
+    }
+  }
+
+  if (!payload || typeof payload !== "object") {
+    throw new Error("stories_json is missing.");
+  }
+
+  const issueData = payload as Partial<IssueData>;
+  if (!Array.isArray(issueData.stories)) {
+    throw new Error("stories_json has no stories array.");
+  }
+
+  return sanitizeIssueData({
+    ...(issueData as IssueData),
+    issue_number: issueNumber,
+  });
+}

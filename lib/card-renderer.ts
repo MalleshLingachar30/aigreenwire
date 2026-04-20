@@ -94,7 +94,7 @@ export function renderCardHTML(card: RenderableCard): string {
   const sourceUrl = toRenderableSourceUrl(card.sourceUrl);
   const footerJustify = sourceUrl ? "space-between" : "flex-start";
   const readMoreCta = sourceUrl
-    ? `<a href="${escapeHtml(sourceUrl)}" style="text-decoration:none;font-size:28px;font-weight:700;color:#ffffff;background:${theme.accent};padding:16px 24px;border-radius:14px;">
+    ? `<a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;font-size:28px;font-weight:700;color:#ffffff;background:${theme.accent};padding:16px 24px;border-radius:14px;">
         ${escapeHtml(languageMeta.readMoreText)}
       </a>`
     : "";

@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
-import { type IssueData } from "@/lib/claude";
 import { isAdminRequestAuthorized } from "@/lib/api-auth";
+import { parseStoredIssueData } from "@/lib/citation-sanitize";
 import { sql } from "@/lib/db";
 import { renderIssueForSubscriber } from "@/lib/issue-email";
 import { batchSendEmails, sendEmail } from "@/lib/resend";
@@ -38,30 +38,6 @@ type SentLogEntry = {
   email: string;
   resendId: string | null;
 };
-
-function parseIssueData(raw: unknown, issueNumber: number): IssueData {
-  let payload = raw;
-
-  if (typeof payload === "string") {
-    try {
-      payload = JSON.parse(payload);
-    } catch {
-      throw new Error("stories_json contains invalid JSON.");
-    }
-  }
-
-  if (!payload || typeof payload !== "object") {
-    throw new Error("stories_json is missing.");
-  }
-
-  const issueData = payload as Partial<IssueData>;
-  if (!Array.isArray(issueData.stories)) {
-    throw new Error("stories_json has no stories array.");
-  }
-
-  issueData.issue_number = issueNumber;
-  return issueData as IssueData;
-}
 
 function escapeHtml(value: string): string {
   return value
@@ -180,7 +156,7 @@ async function insertSentLogs(issueId: string, rows: SentLogEntry[]): Promise<vo
 
 async function sendIssueToConfirmedSubscribers(
   issue: IssueRow,
-  issueData: IssueData,
+  issueData: ReturnType<typeof parseStoredIssueData>,
   subscribers: SubscriberRow[]
 ): Promise<number> {
   let sentCount = 0;
@@ -409,7 +385,7 @@ export async function GET(request: NextRequest) {
     const adminPassword = getAdminPassword();
     const encodedPassword = encodeURIComponent(adminPassword);
 
-    const issueData = parseIssueData(issue.stories_json, Number(issue.issue_number));
+    const issueData = parseStoredIssueData(issue.stories_json, Number(issue.issue_number));
     const subscribers = await findConfirmedSubscribers();
 
     if (subscribers.length === 0) {

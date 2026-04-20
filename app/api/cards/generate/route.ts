@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { type IssueData } from "@/lib/claude";
 import { isAdminRequestAuthorized } from "@/lib/api-auth";
+import { parseStoredIssueData } from "@/lib/citation-sanitize";
 import { sql } from "@/lib/db";
 import {
   generateTranslatedCards,
@@ -17,29 +17,6 @@ type IssueRow = {
   issue_number: number;
   stories_json: unknown;
 };
-
-function parseIssueData(raw: unknown): IssueData {
-  let value = raw;
-
-  if (typeof value === "string") {
-    try {
-      value = JSON.parse(value);
-    } catch {
-      throw new Error("Issue stories_json is invalid JSON.");
-    }
-  }
-
-  if (!value || typeof value !== "object") {
-    throw new Error("Issue stories_json payload is missing.");
-  }
-
-  const data = value as Partial<IssueData>;
-  if (!Array.isArray(data.stories)) {
-    throw new Error("Issue stories_json has no stories array.");
-  }
-
-  return value as IssueData;
-}
 
 async function findIssueById(issueId: string): Promise<IssueRow | null> {
   const rows = (await sql`
@@ -108,8 +85,7 @@ async function handleGenerate(request: NextRequest) {
   }
 
   try {
-    const issueData = parseIssueData(issue.stories_json);
-    issueData.issue_number = Number(issue.issue_number);
+    const issueData = parseStoredIssueData(issue.stories_json, Number(issue.issue_number));
 
     const cards = await generateTranslatedCards(issueData);
     await upsertWhatsAppCards(issue.id, Number(issue.issue_number), cards);
