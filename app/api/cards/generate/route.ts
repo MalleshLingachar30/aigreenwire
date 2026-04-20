@@ -43,23 +43,13 @@ function buildPreviewUrls(issueNumber: number, cards: TranslatedCard[]) {
 }
 
 function buildLanguageUrls(issueNumber: number): Record<Language, string> {
+  const issuePrefix = `/c/${issueNumber}`;
+
   return {
-    kn: buildAppUrl("/api/cards/language", {
-      issue: String(issueNumber),
-      lang: "kn",
-    }),
-    te: buildAppUrl("/api/cards/language", {
-      issue: String(issueNumber),
-      lang: "te",
-    }),
-    ta: buildAppUrl("/api/cards/language", {
-      issue: String(issueNumber),
-      lang: "ta",
-    }),
-    hi: buildAppUrl("/api/cards/language", {
-      issue: String(issueNumber),
-      lang: "hi",
-    }),
+    kn: buildAppUrl(`${issuePrefix}/kn`),
+    te: buildAppUrl(`${issuePrefix}/te`),
+    ta: buildAppUrl(`${issuePrefix}/ta`),
+    hi: buildAppUrl(`${issuePrefix}/hi`),
   };
 }
 
