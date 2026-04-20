@@ -3,6 +3,7 @@ import { isAdminRequestAuthorized } from "@/lib/api-auth";
 import { parseStoredIssueData } from "@/lib/citation-sanitize";
 import { sql } from "@/lib/db";
 import { renderIssueForSubscriber } from "@/lib/issue-email";
+import { regenerateKannadaSharePreview } from "@/lib/kannada-share-preview";
 import { batchSendEmails, sendEmail } from "@/lib/resend";
 import { isUuidToken, isValidEmail, normalizeEmail } from "@/lib/subscription";
 import {
@@ -415,6 +416,7 @@ export async function GET(request: NextRequest) {
     try {
       const translatedCards = await generateTranslatedCards(issueData);
       await upsertWhatsAppCards(issue.id, Number(issue.issue_number), translatedCards);
+      await regenerateKannadaSharePreview(issue.id, Number(issue.issue_number));
       cardsGenerated = true;
       cardsCount = translatedCards.length;
 

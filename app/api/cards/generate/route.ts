@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdminRequestAuthorized } from "@/lib/api-auth";
 import { parseStoredIssueData } from "@/lib/citation-sanitize";
+import { regenerateKannadaSharePreview } from "@/lib/kannada-share-preview";
 import { sql } from "@/lib/db";
 import {
   generateTranslatedCards,
@@ -10,7 +11,7 @@ import {
 } from "@/lib/whatsapp-cards";
 import { buildAppUrl, isUuidToken } from "@/lib/subscription";
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 type IssueRow = {
   id: string;
@@ -79,6 +80,7 @@ async function handleGenerate(request: NextRequest) {
 
     const cards = await generateTranslatedCards(issueData);
     await upsertWhatsAppCards(issue.id, Number(issue.issue_number), cards);
+    await regenerateKannadaSharePreview(issue.id, Number(issue.issue_number));
 
     const galleryUrl = buildAppUrl("/api/cards/gallery", {
       issue: String(issue.issue_number),
