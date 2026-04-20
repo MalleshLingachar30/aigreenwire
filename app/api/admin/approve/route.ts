@@ -220,11 +220,13 @@ function buildCardPreviewLinks(
 }
 
 function buildCardLanguageLinks(issueNumber: number, siteUrl: string): Record<Language, string> {
+  const issuePrefix = `${siteUrl}/c/${issueNumber}`;
+
   return {
-    kn: `${siteUrl}/api/cards/language?issue=${issueNumber}&lang=kn`,
-    te: `${siteUrl}/api/cards/language?issue=${issueNumber}&lang=te`,
-    ta: `${siteUrl}/api/cards/language?issue=${issueNumber}&lang=ta`,
-    hi: `${siteUrl}/api/cards/language?issue=${issueNumber}&lang=hi`,
+    kn: `${issuePrefix}/kn`,
+    te: `${issuePrefix}/te`,
+    ta: `${issuePrefix}/ta`,
+    hi: `${issuePrefix}/hi`,
   };
 }
 
