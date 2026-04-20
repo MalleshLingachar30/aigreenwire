@@ -1,4 +1,5 @@
 import { anthropic, type IssueData, type Story } from "@/lib/claude";
+import { stripCitationMarkup } from "@/lib/citation-sanitize";
 import { sql } from "@/lib/db";
 
 export type Language = "kn" | "te" | "ta" | "hi";
@@ -89,7 +90,24 @@ export type TranslatedCard = {
 };
 
 function sanitizeLine(value: string): string {
-  return value.replace(/\s+/g, " ").trim();
+  return stripCitationMarkup(value).replace(/\s+/g, " ").trim();
+}
+
+function normalizeSourceUrl(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(value.trim());
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      return null;
+    }
+
+    return parsed.toString();
+  } catch {
+    return null;
+  }
 }
 
 function firstNonEmptyLine(lines: string[]): string {
@@ -160,7 +178,7 @@ function buildBaseCards(data: IssueData): BaseCard[] {
       headline: getHeadline(story),
       summary: getSummary(story),
       actionText: getActionLine(story),
-      sourceUrl: primarySource?.url?.trim() || null,
+      sourceUrl: normalizeSourceUrl(primarySource?.url),
       sourceName: primarySource?.name?.trim() || null,
     };
   });
@@ -425,8 +443,13 @@ export async function upsertWhatsAppCards(
   cards: TranslatedCard[]
 ): Promise<void> {
   await Promise.all(
-    cards.map((card) =>
-      sql`
+    cards.map((card) => {
+      const sanitizedHeadline = sanitizeLine(card.headline) || CARD_HEADLINE_FALLBACK;
+      const sanitizedSummary = sanitizeLine(card.summary) || CARD_SUMMARY_FALLBACK;
+      const sanitizedActionText = sanitizeLine(card.actionText) || CARD_ACTION_FALLBACK;
+      const sanitizedSourceUrl = normalizeSourceUrl(card.sourceUrl);
+
+      return sql`
         INSERT INTO whatsapp_cards (
           issue_id,
           issue_number,
@@ -444,11 +467,11 @@ export async function upsertWhatsAppCards(
           ${issueNumber},
           ${card.language},
           ${card.cardNumber},
-          ${card.headline},
-          ${card.summary},
-          ${card.actionText},
+          ${sanitizedHeadline},
+          ${sanitizedSummary},
+          ${sanitizedActionText},
           ${card.tag || null},
-          ${card.sourceUrl},
+          ${sanitizedSourceUrl},
           ${card.sourceName}
         )
         ON CONFLICT (issue_id, language, card_number)
@@ -460,6 +483,6 @@ export async function upsertWhatsAppCards(
           source_url = EXCLUDED.source_url,
           source_name = EXCLUDED.source_name
       `
-    )
+    })
   );
 }

@@ -1,3 +1,4 @@
+import { stripCitationMarkup } from "@/lib/citation-sanitize";
 import { LANGUAGE_CONFIG, type Language, type TranslatedCard } from "@/lib/whatsapp-cards";
 
 type AccentTheme = {
@@ -43,6 +44,26 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
+function sanitizeCardText(value: string): string {
+  return stripCitationMarkup(value).replace(/\s+/g, " ").trim();
+}
+
+function toRenderableSourceUrl(value: string | null): string | null {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(value.trim());
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      return null;
+    }
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
 function getLanguageFont(language: Language): string {
   if (language === "kn") {
     return "'Noto Sans Kannada', 'Noto Sans', sans-serif";
@@ -64,8 +85,19 @@ export function renderCardHTML(card: RenderableCard): string {
   const theme = CARD_THEMES[card.cardNumber];
   const fontFamily = getLanguageFont(card.language);
   const issueLabel = String(card.issueNumber).padStart(2, "0");
-  const sourceName = card.sourceName ? escapeHtml(card.sourceName) : "AI Green Wire Desk";
-  const sourceUrl = card.sourceUrl ? escapeHtml(card.sourceUrl) : "https://aigreenwire.com/issues";
+  const safeTag = sanitizeCardText(card.tag);
+  const safeHeadline = sanitizeCardText(card.headline);
+  const safeSummary = sanitizeCardText(card.summary);
+  const safeActionText = sanitizeCardText(card.actionText);
+  const sanitizedSourceName = card.sourceName ? sanitizeCardText(card.sourceName) : "";
+  const sourceName = sanitizedSourceName ? escapeHtml(sanitizedSourceName) : "AI Green Wire Desk";
+  const sourceUrl = toRenderableSourceUrl(card.sourceUrl);
+  const footerJustify = sourceUrl ? "space-between" : "flex-start";
+  const readMoreCta = sourceUrl
+    ? `<a href="${escapeHtml(sourceUrl)}" style="text-decoration:none;font-size:28px;font-weight:700;color:#ffffff;background:${theme.accent};padding:16px 24px;border-radius:14px;">
+        ${escapeHtml(languageMeta.readMoreText)}
+      </a>`
+    : "";
 
   return `<!DOCTYPE html>
 <html lang="${card.language}">
@@ -100,16 +132,16 @@ export function renderCardHTML(card: RenderableCard): string {
 
     <div style="margin-bottom:26px;">
       <span style="display:inline-block;padding:8px 18px;border-radius:999px;background:${theme.accentSoft};color:${theme.accent};font-size:24px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;">
-        ${escapeHtml(card.tag)}
+        ${escapeHtml(safeTag)}
       </span>
     </div>
 
     <h1 style="margin:0 0 30px;font-size:64px;line-height:1.18;color:${theme.textDark};font-weight:700;">
-      ${escapeHtml(card.headline)}
+      ${escapeHtml(safeHeadline)}
     </h1>
 
     <p style="margin:0 0 36px;font-size:38px;line-height:1.5;color:${theme.textDark};">
-      ${escapeHtml(card.summary)}
+      ${escapeHtml(safeSummary)}
     </p>
 
     <section style="margin-top:auto;background:#ffffff;border:3px solid ${theme.accentSoft};border-left:12px solid ${theme.accent};border-radius:20px;padding:30px 32px 30px;">
@@ -117,18 +149,16 @@ export function renderCardHTML(card: RenderableCard): string {
         ${escapeHtml(languageMeta.actionText)}
       </div>
       <div style="font-size:35px;line-height:1.45;color:${theme.textDark};">
-        ${escapeHtml(card.actionText)}
+        ${escapeHtml(safeActionText)}
       </div>
     </section>
 
-    <footer style="margin-top:32px;padding-top:26px;border-top:3px solid ${theme.accentSoft};display:flex;align-items:flex-end;justify-content:space-between;gap:20px;">
+    <footer style="margin-top:32px;padding-top:26px;border-top:3px solid ${theme.accentSoft};display:flex;align-items:flex-end;justify-content:${footerJustify};gap:20px;">
       <div style="font-size:24px;color:${theme.textDark};line-height:1.4;">
         <div style="margin-bottom:8px;"><strong>${escapeHtml(languageMeta.sourceText)}:</strong> ${sourceName}</div>
         <div style="font-size:22px;opacity:0.85;">aigreenwire.com</div>
       </div>
-      <a href="${sourceUrl}" style="text-decoration:none;font-size:28px;font-weight:700;color:#ffffff;background:${theme.accent};padding:16px 24px;border-radius:14px;">
-        ${escapeHtml(languageMeta.readMoreText)}
-      </a>
+      ${readMoreCta}
     </footer>
   </article>
 </body>
