@@ -124,6 +124,7 @@ test("flags overlapping headlines and repeated source URLs against previous issu
   assert.deepEqual(result.repeatedOpeningEntity?.entity, "jitendra singh");
   assert.equal(result.repeatedOpeningLens?.lens, "policy");
   assert.equal(result.repeatedOpeningStructure?.structure, "this week marks");
+  assert.ok(result.repeatedTopicLaneMatches.length >= 1);
   assert.equal(isIssueFreshEnough(result), false);
 });
 
@@ -236,10 +237,128 @@ test("allows clearly different issue content", () => {
   assert.equal(result.repeatedOpeningEntity, null);
   assert.equal(result.repeatedOpeningLens, null);
   assert.equal(result.repeatedOpeningStructure, null);
+  assert.equal(result.repeatedTopicLaneMatches.length, 0);
   assert.equal(result.duplicateStatMatches.length, 0);
   assert.equal(result.similarFieldNote, null);
   assert.equal(result.similarGreetingBlurb, null);
   assert.equal(isIssueFreshEnough(result), true);
+});
+
+test("flags semantic reruns of recent India policy lanes even when wording changes", () => {
+  const previousIssue: PreviousIssueContext = {
+    issueNumber: 4,
+    subjectLine: "The AI Green Wire · Issue 04 · India's AI Farm Revolution Shifts from Promise to Policy",
+    greetingBlurb:
+      "Namaste. This week marked a watershed moment for Indian agriculture as Bharat-VISTAAR moved multilingual farm advisory into the national policy stack. That policy turn matters because growers may soon receive centralised AI-backed guidance through extension systems. Watch whether Maharashtra and other states move from pilot talk to implementation.",
+    fieldNote: ["Old note."],
+    stories: [
+      {
+        section: "india",
+        headline: "Budget 2026–27 Unveils Bharat-VISTAAR for Nationwide Farm Advisory",
+        sourceUrls: ["https://example.com/bharat-vistaar"],
+      },
+      {
+        section: "india",
+        headline: "Maharashtra Positions AI Agriculture Conference as State Rollout Signal",
+        sourceUrls: ["https://example.com/maharashtra-ai"],
+      },
+    ],
+    stats: [
+      { value: "1", label: "a", sourceUrl: "https://example.com/s1" },
+      { value: "2", label: "b", sourceUrl: "https://example.com/s2" },
+      { value: "3", label: "c", sourceUrl: "https://example.com/s3" },
+      { value: "4", label: "d", sourceUrl: "https://example.com/s4" },
+    ],
+  };
+
+  const currentIssue: IssueData = {
+    issue_number: 5,
+    subject_line: "The AI Green Wire · Issue 05 · New AI rollout promises customised farm guidance",
+    greeting_blurb:
+      "Namaste. India is preparing a national AI rollout for farmers through a multilingual advisory stack tied to mission funding. That policy push matters because states are being asked to convert central announcements into real extension workflows. Watch whether Maharashtra turns its AI agriculture push into district-level implementation before kharif.",
+    stories: [
+      {
+        section: "india",
+        tag: "ADVISORY",
+        headline: "Multilingual farm advisory stack moves closer to national rollout",
+        paragraphs: ["p1", "p2"],
+        sources: [{ name: "PIB", url: "https://example.com/new-1" }],
+      },
+      {
+        section: "india",
+        tag: "MISSION",
+        headline: "India AI Mission ties fresh funding to agriculture deployment",
+        paragraphs: ["p1", "p2"],
+        sources: [{ name: "IndiaAI", url: "https://example.com/new-2" }],
+      },
+      {
+        section: "india",
+        tag: "STATE",
+        headline: "Maharashtra renews AI agriculture push with another state conference",
+        paragraphs: ["p1", "p2"],
+        sources: [{ name: "State", url: "https://example.com/new-3" }],
+      },
+      {
+        section: "forestry",
+        tag: "FORESTRY",
+        headline: "Forest restoration benchmark expands",
+        paragraphs: ["p1", "p2"],
+        sources: [{ name: "Nature", url: "https://example.com/new-4" }],
+      },
+      {
+        section: "forestry",
+        tag: "FORESTRY",
+        headline: "Agroforestry market signal changes",
+        paragraphs: ["p1", "p2"],
+        sources: [{ name: "Nature", url: "https://example.com/new-5" }],
+      },
+      {
+        section: "forestry",
+        tag: "FORESTRY",
+        headline: "Canopy monitoring update",
+        paragraphs: ["p1", "p2"],
+        sources: [{ name: "Nature", url: "https://example.com/new-6" }],
+      },
+      {
+        section: "forestry",
+        tag: "FORESTRY",
+        headline: "Carbon audit study lands",
+        paragraphs: ["p1", "p2"],
+        sources: [{ name: "Nature", url: "https://example.com/new-7" }],
+      },
+      {
+        section: "students",
+        tag: "FELLOWSHIP",
+        headline: "New student call opens",
+        paragraphs: ["p1", "p2"],
+        sources: [{ name: "Adobe", url: "https://example.com/new-8" }],
+      },
+      {
+        section: "students",
+        tag: "PHD",
+        headline: "Doctoral cohort expands",
+        paragraphs: ["p1", "p2"],
+        sources: [{ name: "UKRI", url: "https://example.com/new-9" }],
+      },
+    ],
+    stats: [
+      { value: "10", label: "x", source_name: "x", source_url: "https://example.com/ns1" },
+      { value: "20", label: "y", source_name: "x", source_url: "https://example.com/ns2" },
+      { value: "30", label: "z", source_name: "x", source_url: "https://example.com/ns3" },
+      { value: "40", label: "w", source_name: "x", source_url: "https://example.com/ns4" },
+    ],
+    field_note: ["New note one.", "New note two."],
+  };
+
+  const result = checkIssueFreshness(currentIssue, previousIssue);
+
+  assert.ok(
+    result.repeatedTopicLaneMatches.some((match) => match.laneId === "national-ai-farm-policy-push")
+  );
+  assert.ok(
+    result.repeatedTopicLaneMatches.some((match) => match.laneId === "maharashtra-ai-agriculture-push")
+  );
+  assert.equal(isIssueFreshEnough(result), false);
 });
 
 test("flags duplicate stats when value+label or source URL matches", () => {
@@ -450,6 +569,7 @@ test("handles null previous issues gracefully", () => {
 
   assert.equal(result.duplicateSourceUrlMatches.length, 0);
   assert.equal(result.duplicateStatMatches.length, 0);
+  assert.equal(result.repeatedTopicLaneMatches.length, 0);
   assert.equal(result.similarFieldNote, null);
   assert.equal(result.similarGreetingBlurb, null);
   assert.equal(isIssueFreshEnough(result), true);
@@ -469,5 +589,6 @@ test("handles empty previous issues array gracefully", () => {
 
   const result = checkIssueFreshness(currentIssue, []);
 
+  assert.equal(result.repeatedTopicLaneMatches.length, 0);
   assert.equal(isIssueFreshEnough(result), true);
 });

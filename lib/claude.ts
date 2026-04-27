@@ -92,6 +92,7 @@ Requirements:
 - Exactly 4 stats
 - Keep the full JSON response compact; avoid long paragraphs
 - Avoid recycling the same editorial frame from the previous issue; the subject line, greeting emphasis, and field note should feel newly written this week
+- Avoid recycling the same semantic topic lane from recent issues even if you change the wording. Do not simply rerun the same India national AI-policy, Bharat-VISTAAR-style advisory rollout, India AI Mission agriculture, or Maharashtra AI-agriculture lane unless there is a genuinely material new development in the last 7 days.
 - Opening freshness rule for greeting_blurb:
   - The opening must feel clearly new relative to the previous issue
   - Do not lead with the same person, institution, programme, ministry, or state in consecutive issues unless there is a materially larger follow-on development

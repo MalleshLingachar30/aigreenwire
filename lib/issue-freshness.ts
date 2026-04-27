@@ -25,6 +25,12 @@ export type OpeningLens =
   | "student-opportunity"
   | "unknown";
 
+type TopicLaneDefinition = {
+  id: string;
+  label: string;
+  keywordGroups: string[][];
+};
+
 export type FreshnessCheckResult = {
   duplicateSourceUrlMatches: Array<{
     currentHeadline: string;
@@ -56,6 +62,12 @@ export type FreshnessCheckResult = {
     currentOpeningSentence: string;
     previousOpeningSentence: string;
   } | null;
+  repeatedTopicLaneMatches: Array<{
+    laneId: string;
+    laneLabel: string;
+    previousIssueNumber: number;
+    previousSubjectLine: string;
+  }>;
   duplicateStatMatches: Array<{
     currentValue: string;
     currentLabel: string;
@@ -211,8 +223,55 @@ const OPENING_LENS_KEYWORDS: Record<Exclude<OpeningLens, "unknown">, string[]> =
   ],
 };
 
+const TOPIC_LANE_DEFINITIONS: TopicLaneDefinition[] = [
+  {
+    id: "national-ai-farm-policy-push",
+    label: "national AI farm policy push",
+    keywordGroups: [
+      ["ai", "artificial intelligence"],
+      ["farm", "farmer", "agri", "agriculture"],
+      ["india", "union", "national"],
+      ["policy", "mission", "budget", "scheme", "advisory", "rollout", "minister", "ministry"],
+    ],
+  },
+  {
+    id: "bharat-vistaar-advisory-rollout",
+    label: "Bharat-VISTAAR advisory rollout",
+    keywordGroups: [
+      ["bharat-vistaar", "bharat vistaar"],
+      ["advisory", "multilingual", "agristack", "customised", "customized"],
+      ["farm", "farmer", "agri", "agriculture"],
+    ],
+  },
+  {
+    id: "india-ai-mission-agriculture",
+    label: "India AI Mission for agriculture",
+    keywordGroups: [
+      ["india ai mission", "ai mission", "10372", "10 372", "10372cr", "10372 crore"],
+      ["farm", "farmer", "agri", "agriculture", "advisory"],
+    ],
+  },
+  {
+    id: "maharashtra-ai-agriculture-push",
+    label: "Maharashtra AI agriculture push",
+    keywordGroups: [
+      ["maharashtra", "mahaagri-ai", "mahaagri ai", "ai4agri"],
+      ["ai", "artificial intelligence"],
+      ["farm", "farmer", "agri", "agriculture", "conference", "summit", "policy", "platform"],
+    ],
+  },
+];
+
 function normalizeWhitespace(value: string): string {
   return value.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function normalizeSearchableText(value: string): string {
+  return ` ${normalizeWhitespace(value)
+    .replace(/[₹]/g, " rupee ")
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()} `;
 }
 
 function tokenizeHeadline(value: string): string[] {
@@ -231,6 +290,50 @@ function splitSentences(value: string): string[] {
   return (value.match(/[^.!?]+[.!?]?/g) ?? [])
     .map((sentence) => sentence.trim())
     .filter(Boolean);
+}
+
+function containsKeyword(normalizedText: string, keyword: string): boolean {
+  const normalizedKeyword = normalizeSearchableText(keyword).trim();
+  if (!normalizedKeyword) {
+    return false;
+  }
+
+  return normalizedText.includes(` ${normalizedKeyword} `);
+}
+
+function matchesTopicLane(normalizedText: string, lane: TopicLaneDefinition): boolean {
+  return lane.keywordGroups.every((keywords) =>
+    keywords.some((keyword) => containsKeyword(normalizedText, keyword))
+  );
+}
+
+function extractTopicLanesFromText(value: string): TopicLaneDefinition[] {
+  const normalizedText = normalizeSearchableText(value);
+  return TOPIC_LANE_DEFINITIONS.filter((lane) => matchesTopicLane(normalizedText, lane));
+}
+
+function buildPreviousIssueSearchText(context: PreviousIssueContext): string {
+  return [
+    context.subjectLine,
+    context.greetingBlurb,
+    ...context.stories.map((story) => `${story.section} ${story.headline}`),
+  ].join(" ");
+}
+
+function buildCurrentIssueSearchText(issue: IssueData): string {
+  return [
+    issue.subject_line,
+    issue.greeting_blurb,
+    ...issue.stories.map((story) =>
+      [
+        story.section,
+        story.tag,
+        story.headline,
+        story.paragraphs.join(" "),
+        story.action ?? "",
+      ].join(" ")
+    ),
+  ].join(" ");
 }
 
 function getOpeningSentence(value: string): string {
@@ -362,6 +465,9 @@ export function buildPreviousIssuePromptBlock(
     const previousOpeningSentence = getOpeningSentence(context.greetingBlurb);
     const previousOpeningLens = classifyOpeningLens(context.greetingBlurb);
     const previousOpeningEntity = extractLeadOpeningEntity(previousOpeningSentence);
+    const topicLanes = extractTopicLanesFromText(buildPreviousIssueSearchText(context))
+      .map((lane) => lane.label)
+      .join("; ");
     const storyLines = context.stories
       .map(
         (story, index) =>
@@ -386,6 +492,7 @@ export function buildPreviousIssuePromptBlock(
         `Opening sentence: ${previousOpeningSentence}`,
         `Opening lens: ${previousOpeningLens}`,
         `Lead opening entity: ${previousOpeningEntity ?? "none"}`,
+        `Topic lanes to avoid: ${topicLanes || "none"}`,
         `Field note: ${context.fieldNote.join(" ")}`,
         "Story headlines:",
         storyLines,
@@ -402,6 +509,7 @@ export function buildPreviousIssuePromptBlock(
     ...blocks,
     "--- Freshness rules ---",
     "Do not reuse the same anchor topics, same angle, same framing, or the same primary source URLs from ANY of the above issues unless there is a materially new development that clearly advances the story.",
+    "Semantic topic-lane rule: avoid re-running the same lane from recent issues even if you rewrite the wording. In particular, do not produce another national AI farm policy push, Bharat-VISTAAR advisory rollout, India AI Mission for agriculture, or Maharashtra AI agriculture push unless there is an unmistakable last-7-days development that materially changes the story.",
     "Every story in the new issue must either come from the past 7 days or be an explicit follow-on where the headline and paragraphs clearly state what changed since last week.",
     "Rewrite the editorial framing each week: vary the subject line angle, the greeting emphasis, and the field note advice so readers do not feel they are reading the same issue twice.",
     "Opening freshness rule: do not lead with the same person, institution, programme, ministry, or state in consecutive issues unless there is a materially larger follow-on event. Rotate the opening lens across policy, field impact, research breakthrough, market movement, and student opportunity. Do not reuse formulaic structures such as 'This week marks...' or 'This week marked...'.",
@@ -428,6 +536,7 @@ export function checkIssueFreshness(
     repeatedOpeningEntity: null,
     repeatedOpeningLens: null,
     repeatedOpeningStructure: null,
+    repeatedTopicLaneMatches: [],
     duplicateStatMatches: [],
     similarFieldNote: null,
     similarGreetingBlurb: null,
@@ -450,7 +559,11 @@ export function checkIssueFreshness(
 
   const duplicateSourceUrlMatches: FreshnessCheckResult["duplicateSourceUrlMatches"] = [];
   const similarHeadlineMatches: FreshnessCheckResult["similarHeadlineMatches"] = [];
+  const repeatedTopicLaneMatches: FreshnessCheckResult["repeatedTopicLaneMatches"] = [];
   const duplicateStatMatches: FreshnessCheckResult["duplicateStatMatches"] = [];
+  const currentTopicLaneIds = new Set(
+    extractTopicLanesFromText(buildCurrentIssueSearchText(currentIssue)).map((lane) => lane.id)
+  );
 
   // Opening-level checks only against most recent issue (N-1)
   const currentOpeningSentence = getOpeningSentence(currentIssue.greeting_blurb);
@@ -468,6 +581,25 @@ export function checkIssueFreshness(
 
   // Content-level checks against ALL previous issues
   for (const previousIssue of previousIssues) {
+    const previousTopicLanes = extractTopicLanesFromText(buildPreviousIssueSearchText(previousIssue));
+    for (const lane of previousTopicLanes) {
+      if (!currentTopicLaneIds.has(lane.id)) {
+        continue;
+      }
+
+      const alreadyLogged = repeatedTopicLaneMatches.some(
+        (match) => match.laneId === lane.id && match.previousIssueNumber === previousIssue.issueNumber
+      );
+      if (!alreadyLogged) {
+        repeatedTopicLaneMatches.push({
+          laneId: lane.id,
+          laneLabel: lane.label,
+          previousIssueNumber: previousIssue.issueNumber,
+          previousSubjectLine: previousIssue.subjectLine,
+        });
+      }
+    }
+
     for (const story of currentIssue.stories) {
       const storySourceUrls = new Set(story.sources.map((source) => source.url.trim()));
       const currentTokens = uniqueTokens(story.headline);
@@ -606,6 +738,7 @@ export function checkIssueFreshness(
             previousOpeningSentence,
           }
         : null,
+    repeatedTopicLaneMatches,
     duplicateStatMatches,
     similarFieldNote:
       worstFieldNoteSimilarity >= 0.30
@@ -633,6 +766,7 @@ export function isIssueFreshEnough(result: FreshnessCheckResult): boolean {
   const repeatedOpeningEntity = result.repeatedOpeningEntity !== null;
   const repeatedOpeningLens = result.repeatedOpeningLens !== null;
   const repeatedOpeningStructure = result.repeatedOpeningStructure !== null;
+  const repeatedTopicLanes = result.repeatedTopicLaneMatches.length;
   const duplicateStats = result.duplicateStatMatches.length;
   const similarFieldNote = result.similarFieldNote !== null;
   const similarGreetingBlurb = result.similarGreetingBlurb !== null;
@@ -644,6 +778,7 @@ export function isIssueFreshEnough(result: FreshnessCheckResult): boolean {
     !repeatedOpeningEntity &&
     !repeatedOpeningLens &&
     !repeatedOpeningStructure &&
+    repeatedTopicLanes === 0 &&
     duplicateStats === 0 &&
     !similarFieldNote &&
     !similarGreetingBlurb
@@ -697,6 +832,14 @@ export function formatFreshnessFailure(result: FreshnessCheckResult): string {
   if (result.repeatedOpeningStructure) {
     lines.push(
       `repeated opening structure: ${result.repeatedOpeningStructure.structure} (${result.repeatedOpeningStructure.currentOpeningSentence} <-> ${result.repeatedOpeningStructure.previousOpeningSentence})`
+    );
+  }
+
+  if (result.repeatedTopicLaneMatches.length > 0) {
+    lines.push(
+      `repeated topic lanes: ${result.repeatedTopicLaneMatches
+        .map((match) => `${match.laneLabel} (issue ${match.previousIssueNumber}: ${match.previousSubjectLine})`)
+        .join("; ")}`
     );
   }
 
