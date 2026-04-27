@@ -231,10 +231,15 @@ function buildCardLanguageLinks(issueNumber: number, siteUrl: string): Record<La
   };
 }
 
+function buildCardsHubUrl(issueNumber: number, siteUrl: string): string {
+  return `${siteUrl}/w/${issueNumber}`;
+}
+
 function buildCardsDeliveryEmailHtml(
   issue: IssueRow,
   linksByLanguage: Record<Language, string[]>,
   languageLinksByLanguage: Record<Language, string>,
+  hubUrl: string,
   galleryUrl: string
 ): string {
   const sections = LANGUAGE_SEQUENCE.map((language) => {
@@ -264,12 +269,15 @@ function buildCardsDeliveryEmailHtml(
       2,
       "0"
     )}</h2>`,
-    `<p style="margin:0 0 10px;">English newsletter delivery is complete. Use these links to manually review and forward cards in each language.</p>`,
+    `<p style="margin:0 0 10px;">English newsletter delivery is complete. Use the multilingual issue hub as the main share link, or open the language readers below when you need a language-only page.</p>`,
+    `<p style="margin:0 0 12px;"><strong>Primary WhatsApp hub:</strong> <a href="${escapeHtml(hubUrl)}" style="color:#0f766e;text-decoration:none;">${escapeHtml(
+      hubUrl
+    )}</a></p>`,
     `<p style="margin:0 0 14px;"><strong>Gallery:</strong> <a href="${escapeHtml(galleryUrl)}">${escapeHtml(
       galleryUrl
     )}</a></p>`,
     sections,
-    "<p style=\"margin:10px 0 0;color:#475569;\">Manual forwarding flow: open each preview link, verify copy/layout, then forward through WhatsApp manually.</p>",
+    "<p style=\"margin:10px 0 0;color:#475569;\">Manual forwarding flow: send the hub URL when you want one multilingual link, or use the language readers below for a single-language forwarding flow.</p>",
     "</div>",
   ].join("");
 }
@@ -443,10 +451,12 @@ export async function GET(request: NextRequest) {
         encodedPassword
       );
       const languageLinksByLanguage = buildCardLanguageLinks(Number(issue.issue_number), siteUrl);
+      const cardsHubUrl = buildCardsHubUrl(Number(issue.issue_number), siteUrl);
       const cardsEmailHtml = buildCardsDeliveryEmailHtml(
         issue,
         linksByLanguage,
         languageLinksByLanguage,
+        cardsHubUrl,
         cardsGalleryUrl
       );
 
@@ -473,6 +483,7 @@ export async function GET(request: NextRequest) {
       `WhatsApp cards generated: ${cardsGenerated ? "yes" : "no"}${
         cardsGenerated ? ` (${cardsCount} cards)` : ""
       }.`,
+      `WhatsApp hub: ${buildCardsHubUrl(Number(issue.issue_number), siteUrl)}`,
       `Cards gallery: ${cardsGalleryUrl}`,
     ];
 

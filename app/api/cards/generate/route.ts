@@ -54,6 +54,10 @@ function buildLanguageUrls(issueNumber: number): Record<Language, string> {
   };
 }
 
+function buildIssueHubUrl(issueNumber: number): string {
+  return buildAppUrl(`/w/${issueNumber}`);
+}
+
 async function handleGenerate(request: NextRequest) {
   if (!isAdminRequestAuthorized(request)) {
     return NextResponse.json(
@@ -90,6 +94,7 @@ async function handleGenerate(request: NextRequest) {
       issue: String(issue.issue_number),
     });
     const languageUrls = buildLanguageUrls(Number(issue.issue_number));
+    const hubUrl = buildIssueHubUrl(Number(issue.issue_number));
 
     return NextResponse.json(
       {
@@ -101,6 +106,7 @@ async function handleGenerate(request: NextRequest) {
         cardsGenerated: cards.length,
         previewUrls: buildPreviewUrls(Number(issue.issue_number), cards),
         languageUrls,
+        hubUrl,
         galleryUrl,
       },
       { status: 200 }

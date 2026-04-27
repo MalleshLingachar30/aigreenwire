@@ -31,6 +31,15 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
+function getSiteUrl(): string {
+  const value = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (!value) {
+    throw new Error("NEXT_PUBLIC_SITE_URL is missing.");
+  }
+
+  return value.replace(/\/+$/, "");
+}
+
 export async function GET(request: NextRequest) {
   if (!isAdminRequestAuthorized(request)) {
     return NextResponse.json(
@@ -118,6 +127,9 @@ export async function GET(request: NextRequest) {
   <main style="max-width:1160px;margin:0 auto;">
     <h1 style="margin:0 0 6px;font-size:30px;">WhatsApp Cards Gallery</h1>
     <p style="margin:0 0 24px;font-size:16px;color:#3b5b1f;">Issue ${issueNumber} · 1080x1920 mobile cards</p>
+    <p style="margin:0 0 18px;font-size:15px;color:#3b5b1f;"><strong>Multilingual share hub:</strong> <a href="${escapeHtml(
+      `${getSiteUrl()}/w/${issueNumber}`
+    )}" style="color:#0f766e;text-decoration:none;">${escapeHtml(`${getSiteUrl()}/w/${issueNumber}`)}</a></p>
     ${sections}
   </main>
 </body>
