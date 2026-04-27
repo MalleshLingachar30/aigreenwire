@@ -97,6 +97,25 @@ function isHttpsUrl(value: string): boolean {
   }
 }
 
+function normalizeGreetingBlurb(value: unknown): string {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  const sanitized = stripCitationMarkup(value).trim().replace(/^["'`\s]+/, "");
+  if (!sanitized) {
+    return "";
+  }
+
+  const namasteMatch = sanitized.match(/^namaste\b[\s,:;.!-]*/i);
+  if (namasteMatch) {
+    const remainder = sanitized.slice(namasteMatch[0].length).trim();
+    return remainder ? `Namaste. ${remainder}` : "Namaste.";
+  }
+
+  return `Namaste. ${sanitized}`;
+}
+
 export function extractTextFromAnthropicResponse(response: any): string {
   const textBlocks = response.content.filter((block: any) => block.type === "text");
   const lastText = textBlocks[textBlocks.length - 1]?.text;
@@ -145,10 +164,7 @@ function normalizeIssueData(input: unknown, issueNumber: number): IssueData {
     typeof data.subject_line === "string"
       ? stripCitationMarkup(data.subject_line)
       : "";
-  const greetingBlurb =
-    typeof data.greeting_blurb === "string"
-      ? stripCitationMarkup(data.greeting_blurb)
-      : "";
+  const greetingBlurb = normalizeGreetingBlurb(data.greeting_blurb);
 
   if (!subjectLine) {
     throw new Error("Claude response is missing subject_line.");
