@@ -192,24 +192,24 @@ export function renderHomeShareImage() {
                 <div
                   style={{
                     display: "flex",
-                    fontSize: 50,
+                    fontSize: 46,
                     fontWeight: 700,
                     lineHeight: 1.02,
                     letterSpacing: -1,
                   }}
                 >
-                  Monday
+                  AI for the land
                 </div>
                 <div
                   style={{
                     display: "flex",
                     fontFamily: "Arial, sans-serif",
-                    fontSize: 24,
+                    fontSize: 23,
                     lineHeight: 1.35,
                     color: "#475569",
                   }}
                 >
-                  AI developments that matter for farming, forestry, biodiversity, and the natural world.
+                  Briefings on agriculture, forestry, ecosystems, and climate adaptation.
                 </div>
               </div>
             </div>
@@ -224,10 +224,10 @@ export function renderHomeShareImage() {
               }}
             >
               <div style={{ display: "flex", fontSize: 18, color: "#64748b", textTransform: "uppercase", letterSpacing: 1.5 }}>
-                Prominent share thumbnail
+                What readers get
               </div>
               <div style={{ display: "flex", fontSize: 22, fontWeight: 700, color: "#173404" }}>
-                Built for clear OG previews in WhatsApp, X, and social cards.
+                Signal over hype for growers, foresters, researchers, and climate builders.
               </div>
             </div>
           </div>
