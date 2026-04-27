@@ -10,6 +10,12 @@ import { sendEmail } from "@/lib/resend";
 import { buildAppUrl, isValidEmail, normalizeEmail } from "@/lib/subscription";
 import { renderIssue } from "@/lib/template";
 import { sanitizeIssueData } from "@/lib/citation-sanitize";
+import {
+  checkIssueFreshness,
+  formatFreshnessFailure,
+  isIssueFreshEnough,
+  type PreviousIssueContext,
+} from "@/lib/issue-freshness";
 
 type MaxIssueNumberRow = {
   max_issue_number: number | string | null;
@@ -24,6 +30,13 @@ type DraftIssueRow = {
   status: string;
 };
 
+type PreviousIssueRow = {
+  issue_number: number;
+  subject_line: string;
+  greeting_blurb: string;
+  stories_json: unknown;
+};
+
 type InsertedDraft = {
   id: string;
   issueNumber: number;
@@ -35,6 +48,7 @@ type InsertedDraft = {
 };
 
 const MAX_INSERT_ATTEMPTS = 3;
+const MAX_GENERATION_ATTEMPTS = 3;
 const DEFAULT_MODEL = ISSUE_GENERATION_MODEL;
 
 function getEditorEmail(): string {
@@ -114,6 +128,65 @@ async function getNextIssueNumber(): Promise<number> {
 
   const max = Number(rows[0]?.max_issue_number ?? 0);
   return Number.isFinite(max) ? max + 1 : 1;
+}
+
+async function getPreviousIssueContext(nextIssueNumber: number): Promise<PreviousIssueContext | null> {
+  const rows = (await sql`
+    SELECT
+      issue_number,
+      subject_line,
+      greeting_blurb,
+      stories_json
+    FROM issues
+    WHERE issue_number < ${nextIssueNumber}
+    ORDER BY issue_number DESC
+    LIMIT 1
+  `) as PreviousIssueRow[];
+
+  const previous = rows[0];
+  if (!previous) {
+    return null;
+  }
+
+  const parsed = sanitizeIssueData(
+    JSON.parse(
+      typeof previous.stories_json === "string"
+        ? previous.stories_json
+        : JSON.stringify(previous.stories_json)
+    ) as IssueData
+  );
+
+  return {
+    issueNumber: Number(previous.issue_number),
+    subjectLine: previous.subject_line,
+    greetingBlurb: previous.greeting_blurb,
+    fieldNote: parsed.field_note,
+    stories: parsed.stories.map((story) => ({
+      section: story.section,
+      headline: story.headline,
+      sourceUrls: story.sources.map((source) => source.url),
+    })),
+  };
+}
+
+async function generateFreshIssue(issueNumber: number): Promise<IssueData> {
+  const previousIssue = await getPreviousIssueContext(issueNumber);
+  let lastFailure = "";
+
+  for (let attempt = 0; attempt < MAX_GENERATION_ATTEMPTS; attempt += 1) {
+    const generated = await generateIssue(issueNumber, { previousIssue });
+    const freshness = checkIssueFreshness(generated, previousIssue);
+
+    if (isIssueFreshEnough(freshness)) {
+      return generated;
+    }
+
+    lastFailure = formatFreshnessFailure(freshness);
+  }
+
+  throw new Error(
+    `Generated issue remained too similar to the previous issue after ${MAX_GENERATION_ATTEMPTS} attempts: ${lastFailure}`
+  );
 }
 
 async function createDraftIssue(generated: IssueData, model: string): Promise<InsertedDraft> {
@@ -235,7 +308,8 @@ export async function GET(request: NextRequest) {
 
   try {
     const editorEmail = getEditorEmail();
-    const generated = await generateIssue(await getNextIssueNumber());
+    const nextIssueNumber = await getNextIssueNumber();
+    const generated = await generateFreshIssue(nextIssueNumber);
     const draft = await createDraftIssue(generated, DEFAULT_MODEL);
     const previewHtml = buildPreviewEnvelopeHtml(draft, draft.htmlRendered);
 

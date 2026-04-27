@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { sanitizeIssueData, stripCitationMarkup } from "@/lib/citation-sanitize";
+import { buildPreviousIssuePromptBlock, type PreviousIssueContext } from "@/lib/issue-freshness";
 
 export const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
@@ -30,6 +31,10 @@ export type IssueData = {
   field_note: string[];
 };
 
+type GenerateIssueOptions = {
+  previousIssue?: PreviousIssueContext | null;
+};
+
 const RESEARCH_PROMPT = `You are the research editor for "The AI Green Wire", a weekly newsletter published by Grobet India Agrotech covering AI developments in agriculture, agroforestry, forestry, biodiversity, and ecology — with special emphasis on India and Indian growers.
 
 Your task: use the web_search tool to find the most important developments from the **past 7 days** in these domains. Prioritise:
@@ -46,6 +51,7 @@ Prefer stories with:
 - Named institutions (government ministries, universities, WEF, FAO, Google Research, etc.)
 - Concrete numbers (farmers reached, yield gains, funding amounts, accuracy metrics)
 - Working URLs from authoritative sources (PIB, Reuters, FAO, WEF, ICAR, Nature, research university sites)
+- Developments that are genuinely new this week, not lightly reworded continuations of last week's lead items
 
 **Return ONLY a valid JSON object** (no markdown fences, no prose commentary) matching this exact shape:
 
@@ -83,9 +89,11 @@ Requirements:
 - Exactly 2 stories in "students" section
 - Exactly 4 stats
 - Keep the full JSON response compact; avoid long paragraphs
+- Avoid recycling the same editorial frame from the previous issue; the subject line, greeting emphasis, and field note should feel newly written this week
 - Every story MUST have at least one source with a real, working URL
 - Every source URL must be a full URL starting with https://
 - No made-up URLs — only cite sources you actually found via web_search
+- If you continue a story from the previous issue, only do so when there is a material new development in the past 7 days and make the "what changed" explicit
 - Write in clear, accessible British English. No jargon unexplained.
 - Sandalwood or Karnataka context welcome in the field_note, but not forced into every story`;
 
@@ -258,7 +266,14 @@ function normalizeIssueData(input: unknown, issueNumber: number): IssueData {
   });
 }
 
-export async function generateIssue(issueNumber: number): Promise<IssueData> {
+export async function generateIssue(
+  issueNumber: number,
+  options?: GenerateIssueOptions
+): Promise<IssueData> {
+  const previousIssuePrompt = options?.previousIssue
+    ? `\n\n${buildPreviousIssuePromptBlock(options.previousIssue)}`
+    : "";
+
   const response = await anthropic.messages.create({
     model: ISSUE_GENERATION_MODEL,
     // Keep output budget under Sonnet 4 OTPM while preserving issue quality.
@@ -275,7 +290,7 @@ export async function generateIssue(issueNumber: number): Promise<IssueData> {
         role: "user",
         content: `${RESEARCH_PROMPT}\n\nGenerate the content for issue_number: ${issueNumber}. Today's date is ${new Date()
           .toISOString()
-          .split("T")[0]}.`,
+          .split("T")[0]}.${previousIssuePrompt}`,
       },
     ],
   } as any);
