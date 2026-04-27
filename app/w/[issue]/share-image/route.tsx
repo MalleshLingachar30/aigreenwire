@@ -98,7 +98,7 @@ export async function GET(
               maxWidth: "420px",
             }}
           >
-            {`One shareable link with ${totalCards} cards across four Indian languages.`}
+            {`Read ${totalCards} AI Green Wire cards in Kannada, Telugu, Tamil, and Hindi.`}
           </div>
           <div
             style={{
@@ -162,7 +162,7 @@ export async function GET(
               maxWidth: "430px",
             }}
           >
-            Send one master link. Readers open the hub and choose Kannada, Telugu, Tamil, or Hindi inside it.
+            Open the hub and choose Kannada, Telugu, Tamil, or Hindi inside.
           </div>
         </div>
         <div
