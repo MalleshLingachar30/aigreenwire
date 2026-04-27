@@ -92,62 +92,24 @@ export async function GET(
             style={{
               display: "flex",
               marginTop: "18px",
-              fontSize: 28,
-              lineHeight: 1.34,
+              fontSize: 30,
+              lineHeight: 1.3,
               opacity: 0.92,
               maxWidth: "420px",
             }}
           >
-            {`Read this week's AI farming cards in Kannada, Telugu, Tamil, and Hindi.`}
+            {`This week's AI farming cards in Kannada, Telugu, Tamil, and Hindi.`}
           </div>
           <div
             style={{
               display: "flex",
-              gap: "12px",
-              marginTop: "28px",
-              flexWrap: "wrap",
-              maxWidth: "440px",
+              marginTop: "24px",
+              fontSize: 21,
+              fontWeight: 700,
+              opacity: 0.88,
             }}
           >
-            <div
-              style={{
-                display: "flex",
-                padding: "10px 14px",
-                borderRadius: "999px",
-                background: "rgba(255,255,255,0.16)",
-                border: "1px solid rgba(255,255,255,0.18)",
-                fontSize: 18,
-                fontWeight: 700,
-              }}
-            >
-              12 cards
-            </div>
-            <div
-              style={{
-                display: "flex",
-                padding: "10px 14px",
-                borderRadius: "999px",
-                background: "rgba(255,255,255,0.16)",
-                border: "1px solid rgba(255,255,255,0.18)",
-                fontSize: 18,
-                fontWeight: 700,
-              }}
-            >
-              4 languages
-            </div>
-            <div
-              style={{
-                display: "flex",
-                padding: "10px 14px",
-                borderRadius: "999px",
-                background: "rgba(255,255,255,0.16)",
-                border: "1px solid rgba(255,255,255,0.18)",
-                fontSize: 18,
-                fontWeight: 700,
-              }}
-            >
-              One URL
-            </div>
+            12 cards · 4 Indian languages
           </div>
         </div>
         <div
