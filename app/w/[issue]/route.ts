@@ -19,7 +19,7 @@ export async function GET(
   }
 
   const shortUrl = new URL(`/w/${issueNumber}`, request.url).toString();
-  const ogImageUrl = new URL(`/w/${issueNumber}/share-image`, request.url).toString();
+  const ogImageUrl = new URL(`/w/${issueNumber}/share-image?v=2`, request.url).toString();
 
   return renderIssueHubResponse({
     issueNumber,

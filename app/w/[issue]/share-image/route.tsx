@@ -80,13 +80,13 @@ export async function GET(
             style={{
               display: "flex",
               marginTop: "22px",
-              fontSize: 62,
+              fontSize: 58,
               fontWeight: 800,
               lineHeight: 1.02,
               letterSpacing: -1.5,
             }}
           >
-            {`WhatsApp Hub · Issue ${issueLabel}`}
+            {`AI Green Wire · Issue ${issueLabel}`}
           </div>
           <div
             style={{
@@ -98,7 +98,7 @@ export async function GET(
               maxWidth: "420px",
             }}
           >
-            {`Read ${totalCards} AI Green Wire cards in Kannada, Telugu, Tamil, and Hindi.`}
+            {`Read this week's AI farming cards in Kannada, Telugu, Tamil, and Hindi.`}
           </div>
           <div
             style={{
@@ -148,21 +148,6 @@ export async function GET(
             >
               One URL
             </div>
-          </div>
-          <div
-            style={{
-              display: "flex",
-              marginTop: "auto",
-              padding: "18px 20px",
-              borderRadius: "24px",
-              background: "rgba(255,255,255,0.12)",
-              border: "1px solid rgba(255,255,255,0.16)",
-              fontSize: 20,
-              lineHeight: 1.45,
-              maxWidth: "430px",
-            }}
-          >
-            Open the hub and choose Kannada, Telugu, Tamil, or Hindi inside.
           </div>
         </div>
         <div
