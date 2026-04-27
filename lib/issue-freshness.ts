@@ -31,6 +31,11 @@ type TopicLaneDefinition = {
   keywordGroups: string[][];
 };
 
+export type TopicLaneMatch = {
+  id: string;
+  label: string;
+};
+
 export type FreshnessCheckResult = {
   duplicateSourceUrlMatches: Array<{
     currentHeadline: string;
@@ -229,9 +234,18 @@ const TOPIC_LANE_DEFINITIONS: TopicLaneDefinition[] = [
     label: "national AI farm policy push",
     keywordGroups: [
       ["ai", "artificial intelligence"],
-      ["farm", "farmer", "agri", "agriculture"],
+      ["farm", "farmer", "farmers", "grower", "growers", "agri", "agriculture"],
       ["india", "union", "national"],
       ["policy", "mission", "budget", "scheme", "advisory", "rollout", "minister", "ministry"],
+    ],
+  },
+  {
+    id: "national-farm-advisory-rollout",
+    label: "national farm advisory rollout",
+    keywordGroups: [
+      ["national", "nationwide", "india", "union"],
+      ["farm", "farmer", "farmers", "grower", "growers", "agri", "agriculture"],
+      ["advisory", "guidance", "multilingual", "rollout", "customised", "customized"],
     ],
   },
   {
@@ -240,7 +254,7 @@ const TOPIC_LANE_DEFINITIONS: TopicLaneDefinition[] = [
     keywordGroups: [
       ["bharat-vistaar", "bharat vistaar"],
       ["advisory", "multilingual", "agristack", "customised", "customized"],
-      ["farm", "farmer", "agri", "agriculture"],
+      ["farm", "farmer", "farmers", "grower", "growers", "agri", "agriculture"],
     ],
   },
   {
@@ -248,7 +262,7 @@ const TOPIC_LANE_DEFINITIONS: TopicLaneDefinition[] = [
     label: "India AI Mission for agriculture",
     keywordGroups: [
       ["india ai mission", "ai mission", "10372", "10 372", "10372cr", "10372 crore"],
-      ["farm", "farmer", "agri", "agriculture", "advisory"],
+      ["farm", "farmer", "farmers", "grower", "growers", "agri", "agriculture", "advisory"],
     ],
   },
   {
@@ -257,7 +271,19 @@ const TOPIC_LANE_DEFINITIONS: TopicLaneDefinition[] = [
     keywordGroups: [
       ["maharashtra", "mahaagri-ai", "mahaagri ai", "ai4agri"],
       ["ai", "artificial intelligence"],
-      ["farm", "farmer", "agri", "agriculture", "conference", "summit", "policy", "platform"],
+      [
+        "farm",
+        "farmer",
+        "farmers",
+        "grower",
+        "growers",
+        "agri",
+        "agriculture",
+        "conference",
+        "summit",
+        "policy",
+        "platform",
+      ],
     ],
   },
 ];
@@ -307,9 +333,44 @@ function matchesTopicLane(normalizedText: string, lane: TopicLaneDefinition): bo
   );
 }
 
-function extractTopicLanesFromText(value: string): TopicLaneDefinition[] {
+export function detectTopicLanesFromText(value: string): TopicLaneMatch[] {
   const normalizedText = normalizeSearchableText(value);
-  return TOPIC_LANE_DEFINITIONS.filter((lane) => matchesTopicLane(normalizedText, lane));
+  return TOPIC_LANE_DEFINITIONS.filter((lane) => matchesTopicLane(normalizedText, lane)).map(
+    (lane) => ({
+      id: lane.id,
+      label: lane.label,
+    })
+  );
+}
+
+export function detectTopicLanesForStory(story: Pick<Story, "section" | "tag" | "headline" | "paragraphs" | "action">): TopicLaneMatch[] {
+  return detectTopicLanesFromText(
+    [
+      story.section,
+      story.tag,
+      story.headline,
+      story.paragraphs.join(" "),
+      story.action ?? "",
+    ].join(" ")
+  );
+}
+
+export function detectTopicLanesForIssue(issue: Pick<IssueData, "subject_line" | "greeting_blurb" | "stories">): TopicLaneMatch[] {
+  return detectTopicLanesFromText(
+    [
+      issue.subject_line,
+      issue.greeting_blurb,
+      ...issue.stories.map((story) =>
+        [
+          story.section,
+          story.tag,
+          story.headline,
+          story.paragraphs.join(" "),
+          story.action ?? "",
+        ].join(" ")
+      ),
+    ].join(" ")
+  );
 }
 
 function buildPreviousIssueSearchText(context: PreviousIssueContext): string {
@@ -465,7 +526,7 @@ export function buildPreviousIssuePromptBlock(
     const previousOpeningSentence = getOpeningSentence(context.greetingBlurb);
     const previousOpeningLens = classifyOpeningLens(context.greetingBlurb);
     const previousOpeningEntity = extractLeadOpeningEntity(previousOpeningSentence);
-    const topicLanes = extractTopicLanesFromText(buildPreviousIssueSearchText(context))
+    const topicLanes = detectTopicLanesFromText(buildPreviousIssueSearchText(context))
       .map((lane) => lane.label)
       .join("; ");
     const storyLines = context.stories
@@ -562,7 +623,7 @@ export function checkIssueFreshness(
   const repeatedTopicLaneMatches: FreshnessCheckResult["repeatedTopicLaneMatches"] = [];
   const duplicateStatMatches: FreshnessCheckResult["duplicateStatMatches"] = [];
   const currentTopicLaneIds = new Set(
-    extractTopicLanesFromText(buildCurrentIssueSearchText(currentIssue)).map((lane) => lane.id)
+    detectTopicLanesFromText(buildCurrentIssueSearchText(currentIssue)).map((lane) => lane.id)
   );
 
   // Opening-level checks only against most recent issue (N-1)
@@ -581,7 +642,7 @@ export function checkIssueFreshness(
 
   // Content-level checks against ALL previous issues
   for (const previousIssue of previousIssues) {
-    const previousTopicLanes = extractTopicLanesFromText(buildPreviousIssueSearchText(previousIssue));
+    const previousTopicLanes = detectTopicLanesFromText(buildPreviousIssueSearchText(previousIssue));
     for (const lane of previousTopicLanes) {
       if (!currentTopicLaneIds.has(lane.id)) {
         continue;

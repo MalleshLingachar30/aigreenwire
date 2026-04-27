@@ -1,6 +1,7 @@
 import { anthropic, type IssueData, type Story } from "@/lib/claude";
-import { stripCitationMarkup } from "@/lib/citation-sanitize";
+import { parseStoredIssueData, stripCitationMarkup } from "@/lib/citation-sanitize";
 import { sql } from "@/lib/db";
+import { selectTopStoriesWithFreshness } from "@/lib/whatsapp-card-selection";
 
 export type Language = "kn" | "te" | "ta" | "hi";
 
@@ -149,24 +150,34 @@ export function isLanguage(value: string | null): value is Language {
   return LANGUAGE_LIST.includes(value as Language);
 }
 
-export function selectTopStories(data: IssueData): [Story, Story, Story] {
-  const indiaStories = data.stories.filter((story) => story.section === "india");
-  const forestryStories = data.stories.filter((story) => story.section === "forestry");
-  const studentStories = data.stories.filter((story) => story.section === "students");
+type PreviousIssueRow = {
+  issue_number: number;
+  stories_json: unknown;
+};
 
-  const primaryIndia = indiaStories[0];
-  const primaryForestry = forestryStories[0];
-  const flexStory = indiaStories[1] ?? forestryStories[1] ?? studentStories[0];
+async function findPreviousSentIssueData(issueNumber: number): Promise<IssueData | null> {
+  const rows = (await sql`
+    SELECT
+      issue_number,
+      stories_json
+    FROM issues
+    WHERE issue_number < ${issueNumber}
+      AND status = 'sent'
+    ORDER BY issue_number DESC
+    LIMIT 1
+  `) as PreviousIssueRow[];
 
-  if (!primaryIndia || !primaryForestry || !flexStory) {
-    throw new Error("Issue data does not include enough stories for WhatsApp card selection.");
+  const previous = rows[0];
+  if (!previous) {
+    return null;
   }
 
-  return [primaryIndia, primaryForestry, flexStory];
+  return parseStoredIssueData(previous.stories_json, Number(previous.issue_number));
 }
 
-function buildBaseCards(data: IssueData): BaseCard[] {
-  const topStories = selectTopStories(data);
+async function buildBaseCards(data: IssueData): Promise<BaseCard[]> {
+  const previousIssueData = await findPreviousSentIssueData(data.issue_number);
+  const topStories = selectTopStoriesWithFreshness(data, previousIssueData);
 
   return topStories.map((story, index) => {
     const primarySource = story.sources[0];
@@ -407,7 +418,7 @@ async function translateSingleCardForLanguage(
 }
 
 export async function generateTranslatedCards(data: IssueData): Promise<TranslatedCard[]> {
-  const baseCards = buildBaseCards(data);
+  const baseCards = await buildBaseCards(data);
   const translatedByLanguage = await Promise.all(
     LANGUAGE_LIST.map(async (language) => {
       try {
