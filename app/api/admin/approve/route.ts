@@ -270,9 +270,16 @@ function buildCardsDeliveryEmailHtml(
       "0"
     )}</h2>`,
     `<p style="margin:0 0 10px;">English newsletter delivery is complete. Use the multilingual issue hub as the main share link, or open the language readers below when you need a language-only page.</p>`,
-    `<p style="margin:0 0 12px;"><strong>Primary WhatsApp hub:</strong> <a href="${escapeHtml(hubUrl)}" style="color:#0f766e;text-decoration:none;">${escapeHtml(
-      hubUrl
-    )}</a></p>`,
+    `<div style="margin:0 0 16px;padding:16px;border:1px solid #cfe7da;border-radius:14px;background:#f4fbf6;">
+      <p style="margin:0 0 10px;font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#0f766e;">Primary Share Link</p>
+      <p style="margin:0 0 12px;font-size:14px;color:#0f172a;">Send this single issue hub when you want one multilingual WhatsApp-ready link for all 12 cards.</p>
+      <p style="margin:0 0 12px;">
+        <a href="${escapeHtml(
+          hubUrl
+        )}" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:12px 18px;border-radius:999px;">Open WhatsApp Issue Hub</a>
+      </p>
+      <p style="margin:0;font-size:13px;color:#475569;">${escapeHtml(hubUrl)}</p>
+    </div>`,
     `<p style="margin:0 0 14px;"><strong>Gallery:</strong> <a href="${escapeHtml(galleryUrl)}">${escapeHtml(
       galleryUrl
     )}</a></p>`,
