@@ -11,7 +11,8 @@ test("flags overlapping headlines and repeated source URLs against previous issu
   const previousIssue: PreviousIssueContext = {
     issueNumber: 4,
     subjectLine: "The AI Green Wire · Issue 04 · India's AI Farm Revolution Shifts from Promise to Policy",
-    greetingBlurb: "Namaste. Policy moved. Growers should pay attention.",
+    greetingBlurb:
+      "Namaste. This week marks a watershed policy moment as Dr Jitendra Singh positioned Bharat-VISTAAR at the centre of India's farm advisory push. That policy framing matters because growers are being asked to treat AI-backed advisories as near-term operating tools. Watch whether states move from announcements to implementation.",
     fieldNote: ["Watch the policy lane.", "Adjust your planning to fresh developments."],
     stories: [
       {
@@ -32,7 +33,8 @@ test("flags overlapping headlines and repeated source URLs against previous issu
   const currentIssue: IssueData = {
     issue_number: 5,
     subject_line: "The AI Green Wire · Issue 05 · India announces ₹10,372cr AI revolution for farms",
-    greeting_blurb: "Namaste. New signals. Fresh week.",
+    greeting_blurb:
+      "Namaste. This week marks a bigger policy push as Dr Jitendra Singh ties Bharat-VISTAAR to the India AI Mission. That matters because growers may soon see advisory tools backed by national rollout budgets. Watch whether state extension systems integrate the new stack before kharif planning.",
     stories: [
       {
         section: "india",
@@ -113,6 +115,9 @@ test("flags overlapping headlines and repeated source URLs against previous issu
   assert.ok(
     result.similarHeadlineMatches.length >= 1 || result.similarSubjectLine !== null
   );
+  assert.deepEqual(result.repeatedOpeningEntity?.entity, "jitendra singh");
+  assert.equal(result.repeatedOpeningLens?.lens, "policy");
+  assert.equal(result.repeatedOpeningStructure?.structure, "this week marks");
   assert.equal(isIssueFreshEnough(result), false);
 });
 
@@ -120,7 +125,8 @@ test("allows clearly different issue content", () => {
   const previousIssue: PreviousIssueContext = {
     issueNumber: 4,
     subjectLine: "Previous issue",
-    greetingBlurb: "Namaste. Previous week. Old framing.",
+    greetingBlurb:
+      "Namaste. This week marks a policy shift as the agriculture ministry moved multilingual advisories into the national spotlight. That policy turn matters because growers may soon see central guidance shape local extension practice. Watch whether implementation funding follows the announcement.",
     fieldNote: ["Old note one.", "Old note two."],
     stories: [
       {
@@ -134,7 +140,8 @@ test("allows clearly different issue content", () => {
   const currentIssue: IssueData = {
     issue_number: 5,
     subject_line: "Current issue",
-    greeting_blurb: "Namaste. New signals. Fresh week.",
+    greeting_blurb:
+      "Namaste. Farmers in drought districts are now using satellite irrigation audits to decide which canal repairs matter first. That field impact matters because growers can act on water constraints before the next planting window. Watch whether more cooperatives adopt the audit workflow before monsoon stress deepens.",
     stories: [
       {
         section: "india",
@@ -214,5 +221,8 @@ test("allows clearly different issue content", () => {
   assert.equal(result.duplicateSourceUrlMatches.length, 0);
   assert.equal(result.similarHeadlineMatches.length, 0);
   assert.equal(result.similarSubjectLine, null);
+  assert.equal(result.repeatedOpeningEntity, null);
+  assert.equal(result.repeatedOpeningLens, null);
+  assert.equal(result.repeatedOpeningStructure, null);
   assert.equal(isIssueFreshEnough(result), true);
 });

@@ -90,6 +90,16 @@ Requirements:
 - Exactly 4 stats
 - Keep the full JSON response compact; avoid long paragraphs
 - Avoid recycling the same editorial frame from the previous issue; the subject line, greeting emphasis, and field note should feel newly written this week
+- Opening freshness rule for greeting_blurb:
+  - The opening must feel clearly new relative to the previous issue
+  - Do not lead with the same person, institution, programme, ministry, or state in consecutive issues unless there is a materially larger follow-on development
+  - Rotate the opening lens across policy, field impact, research breakthrough, market movement, and student opportunity
+  - If last week opened with policy, prefer a different lens this week unless policy news is overwhelmingly dominant
+  - Do not reuse formulaic starters such as "This week marks...", "This week marked...", "This week signals...", "This week shows...", or "India positions..."
+  - Sentence 1 must identify the single strongest fresh development from the past 7 days
+  - Sentence 2 must explain why it matters through this week's chosen lens
+  - Sentence 3 must say what readers should watch next
+  - If you continue a prior story, explicitly state what changed since last week in the opening
 - Every story MUST have at least one source with a real, working URL
 - Every source URL must be a full URL starting with https://
 - No made-up URLs — only cite sources you actually found via web_search
