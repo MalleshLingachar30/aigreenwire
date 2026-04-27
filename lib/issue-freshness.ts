@@ -530,34 +530,30 @@ export function buildPreviousIssuePromptBlock(
       .map((lane) => lane.label)
       .join("; ");
     const storyLines = context.stories
+      .slice(0, 3)
       .map(
-        (story, index) =>
-          `${index + 1}. [${story.section}] ${story.headline}${
-            story.sourceUrls[0] ? ` (${story.sourceUrls[0]})` : ""
-          }`
+        (story, index) => `${index + 1}. [${story.section}] ${story.headline}`
       )
       .join("\n");
 
     const statLines = context.stats
+      .slice(0, 2)
       .map(
-        (stat, index) =>
-          `${index + 1}. ${stat.value} — ${stat.label} (${stat.sourceUrl})`
+        (stat, index) => `${index + 1}. ${stat.value} — ${stat.label}`
       )
       .join("\n");
 
     blocks.push(
       [
-        `--- Issue ${context.issueNumber} (do not repeat) ---`,
-        `Subject line: ${context.subjectLine}`,
-        `Greeting blurb: ${context.greetingBlurb}`,
-        `Opening sentence: ${previousOpeningSentence}`,
-        `Opening lens: ${previousOpeningLens}`,
-        `Lead opening entity: ${previousOpeningEntity ?? "none"}`,
-        `Topic lanes to avoid: ${topicLanes || "none"}`,
-        `Field note: ${context.fieldNote.join(" ")}`,
-        "Story headlines:",
+        `--- Issue ${context.issueNumber} ---`,
+        `Subject: ${context.subjectLine}`,
+        `Opening: ${previousOpeningSentence}`,
+        `Lens: ${previousOpeningLens}; Entity: ${previousOpeningEntity ?? "none"}`,
+        `Blocked lanes: ${topicLanes || "none"}`,
+        `Field note theme: ${context.fieldNote.join(" ")}`,
+        "Top headlines to avoid repeating:",
         storyLines,
-        "Stats (do NOT reuse):",
+        "Stats to avoid repeating:",
         statLines,
       ].join("\n")
     );
@@ -569,7 +565,7 @@ export function buildPreviousIssuePromptBlock(
     `Previous issue context to avoid repeating: issues ${issueNumbers}.`,
     ...blocks,
     "--- Freshness rules ---",
-    "Do not reuse the same anchor topics, same angle, same framing, or the same primary source URLs from ANY of the above issues unless there is a materially new development that clearly advances the story.",
+    "Do not reuse the same anchor topics, same angle, or same framing from any of the above issues unless there is a materially new development that clearly advances the story.",
     "Semantic topic-lane rule: avoid re-running the same lane from recent issues even if you rewrite the wording. In particular, do not produce another national AI farm policy push, Bharat-VISTAAR advisory rollout, India AI Mission for agriculture, or Maharashtra AI agriculture push unless there is an unmistakable last-7-days development that materially changes the story.",
     "Every story in the new issue must either come from the past 7 days or be an explicit follow-on where the headline and paragraphs clearly state what changed since last week.",
     "Rewrite the editorial framing each week: vary the subject line angle, the greeting emphasis, and the field note advice so readers do not feel they are reading the same issue twice.",

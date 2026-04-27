@@ -142,7 +142,7 @@ async function getNextIssueNumber(): Promise<number> {
   return Number.isFinite(max) ? max + 1 : 1;
 }
 
-const PREVIOUS_ISSUES_LOOKBACK = 3;
+const PREVIOUS_ISSUES_LOOKBACK = 2;
 
 async function getPreviousIssueContexts(nextIssueNumber: number): Promise<PreviousIssueContext[]> {
   const rows = (await sql`
