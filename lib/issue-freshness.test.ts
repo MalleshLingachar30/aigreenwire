@@ -28,6 +28,12 @@ test("flags overlapping headlines and repeated source URLs against previous issu
         sourceUrls: ["https://example.com/fao-purdue"],
       },
     ],
+    stats: [
+      { value: "$8.9B", label: "AI in agriculture market", sourceUrl: "https://example.com/stat-old-1" },
+      { value: "1.8M", label: "forest plots mapped", sourceUrl: "https://example.com/stat-old-2" },
+      { value: "42%", label: "yield improvement", sourceUrl: "https://example.com/stat-old-3" },
+      { value: "₹10,372cr", label: "budget allocation", sourceUrl: "https://example.com/stat-old-4" },
+    ],
   };
 
   const currentIssue: IssueData = {
@@ -135,6 +141,12 @@ test("allows clearly different issue content", () => {
         sourceUrls: ["https://example.com/old-1"],
       },
     ],
+    stats: [
+      { value: "$8.9B", label: "AI in agriculture market", sourceUrl: "https://example.com/stat-old-1" },
+      { value: "1.8M", label: "forest plots mapped", sourceUrl: "https://example.com/stat-old-2" },
+      { value: "42%", label: "yield improvement", sourceUrl: "https://example.com/stat-old-3" },
+      { value: "₹10,372cr", label: "budget allocation", sourceUrl: "https://example.com/stat-old-4" },
+    ],
   };
 
   const currentIssue: IssueData = {
@@ -208,12 +220,12 @@ test("allows clearly different issue content", () => {
       },
     ],
     stats: [
-      { value: "1", label: "a", source_name: "x", source_url: "https://example.com/1" },
-      { value: "2", label: "b", source_name: "x", source_url: "https://example.com/2" },
-      { value: "3", label: "c", source_name: "x", source_url: "https://example.com/3" },
-      { value: "4", label: "d", source_name: "x", source_url: "https://example.com/4" },
+      { value: "550K", label: "tonnes carbon sequestered", source_name: "x", source_url: "https://example.com/new-stat-1" },
+      { value: "12", label: "new AI startups funded", source_name: "x", source_url: "https://example.com/new-stat-2" },
+      { value: "78%", label: "detection accuracy", source_name: "x", source_url: "https://example.com/new-stat-3" },
+      { value: "3.2M", label: "hectares under monitoring", source_name: "x", source_url: "https://example.com/new-stat-4" },
     ],
-    field_note: ["one", "two"],
+    field_note: ["Brand new advice about pest management.", "Specific seasonal guidance for monsoon prep."],
   };
 
   const result = checkIssueFreshness(currentIssue, previousIssue);
@@ -224,5 +236,238 @@ test("allows clearly different issue content", () => {
   assert.equal(result.repeatedOpeningEntity, null);
   assert.equal(result.repeatedOpeningLens, null);
   assert.equal(result.repeatedOpeningStructure, null);
+  assert.equal(result.duplicateStatMatches.length, 0);
+  assert.equal(result.similarFieldNote, null);
+  assert.equal(result.similarGreetingBlurb, null);
+  assert.equal(isIssueFreshEnough(result), true);
+});
+
+test("flags duplicate stats when value+label or source URL matches", () => {
+  const previousIssue: PreviousIssueContext = {
+    issueNumber: 4,
+    subjectLine: "Previous issue",
+    greetingBlurb: "Namaste. Different content about market movements this week.",
+    fieldNote: ["Old advice."],
+    stories: [],
+    stats: [
+      { value: "$8.9B", label: "AI in agriculture market size", sourceUrl: "https://example.com/stat-1" },
+      { value: "1.8M", label: "forest plots", sourceUrl: "https://example.com/stat-2" },
+      { value: "42%", label: "yield gain", sourceUrl: "https://example.com/stat-3" },
+      { value: "₹500cr", label: "funding round", sourceUrl: "https://example.com/stat-4" },
+    ],
+  };
+
+  const currentIssue: IssueData = {
+    issue_number: 5,
+    subject_line: "Completely new subject",
+    greeting_blurb: "Namaste. A research breakthrough in remote sensing changes how canopy health is measured across tropical forests.",
+    stories: [],
+    stats: [
+      // Exact value+label match
+      { value: "$8.9B", label: "AI in agriculture market size", source_name: "x", source_url: "https://example.com/different-url" },
+      // Same source URL
+      { value: "999", label: "new label", source_name: "x", source_url: "https://example.com/stat-2" },
+      // Completely new
+      { value: "15%", label: "efficiency gain", source_name: "x", source_url: "https://example.com/new-stat" },
+      { value: "200K", label: "sensors deployed", source_name: "x", source_url: "https://example.com/new-stat-2" },
+    ],
+    field_note: ["Completely different advice."],
+  };
+
+  const result = checkIssueFreshness(currentIssue, previousIssue);
+
+  assert.equal(result.duplicateStatMatches.length, 2);
+  assert.equal(isIssueFreshEnough(result), false);
+});
+
+test("flags similar field note content", () => {
+  const previousIssue: PreviousIssueContext = {
+    issueNumber: 4,
+    subjectLine: "Previous issue",
+    greetingBlurb: "Namaste. Market movements in carbon credits are reshaping investor expectations across Southeast Asia.",
+    fieldNote: [
+      "Sandalwood growers should watch for heartwood borers during the warm dry spell ahead of monsoon.",
+      "Apply neem oil preventively and inspect host trees for gall formation before June rains begin.",
+    ],
+    stories: [],
+    stats: [
+      { value: "1", label: "a", sourceUrl: "https://example.com/s1" },
+      { value: "2", label: "b", sourceUrl: "https://example.com/s2" },
+      { value: "3", label: "c", sourceUrl: "https://example.com/s3" },
+      { value: "4", label: "d", sourceUrl: "https://example.com/s4" },
+    ],
+  };
+
+  const currentIssue: IssueData = {
+    issue_number: 5,
+    subject_line: "Completely different subject",
+    greeting_blurb: "Namaste. A startup in Hyderabad demonstrates real-time soil moisture prediction from satellite imagery.",
+    stories: [],
+    stats: [
+      { value: "10", label: "x", source_name: "x", source_url: "https://example.com/ns1" },
+      { value: "20", label: "y", source_name: "x", source_url: "https://example.com/ns2" },
+      { value: "30", label: "z", source_name: "x", source_url: "https://example.com/ns3" },
+      { value: "40", label: "w", source_name: "x", source_url: "https://example.com/ns4" },
+    ],
+    // Near-identical field note — just slightly rephrased
+    field_note: [
+      "Sandalwood growers should watch for heartwood borers during the warm dry spell before monsoon arrives.",
+      "Apply neem oil as a preventive measure and inspect host trees for gall formation before June.",
+    ],
+  };
+
+  const result = checkIssueFreshness(currentIssue, previousIssue);
+
+  assert.ok(result.similarFieldNote !== null, "should flag similar field note");
+  assert.ok(result.similarFieldNote!.similarity >= 0.30);
+  assert.equal(isIssueFreshEnough(result), false);
+});
+
+test("flags similar greeting blurb content", () => {
+  const previousIssue: PreviousIssueContext = {
+    issueNumber: 4,
+    subjectLine: "Previous issue",
+    greetingBlurb:
+      "Namaste. Satellite irrigation audits are helping drought district farmers prioritize canal repair work this season. That field impact matters because growers need real-time water data before planting windows close. Watch whether cooperative adoption picks up before monsoon.",
+    fieldNote: ["Old note."],
+    stories: [],
+    stats: [
+      { value: "1", label: "a", sourceUrl: "https://example.com/s1" },
+      { value: "2", label: "b", sourceUrl: "https://example.com/s2" },
+      { value: "3", label: "c", sourceUrl: "https://example.com/s3" },
+      { value: "4", label: "d", sourceUrl: "https://example.com/s4" },
+    ],
+  };
+
+  const currentIssue: IssueData = {
+    issue_number: 5,
+    subject_line: "Completely different subject",
+    // Same meaning, slightly reworded — should still trigger similarity
+    greeting_blurb:
+      "Namaste. Satellite irrigation audit tools are helping drought district farmers decide which canal repairs matter most this season. That field impact matters because growers need water data before planting windows close. Watch whether cooperatives adopt these audits before monsoon stress deepens.",
+    stories: [],
+    stats: [
+      { value: "10", label: "x", source_name: "x", source_url: "https://example.com/ns1" },
+      { value: "20", label: "y", source_name: "x", source_url: "https://example.com/ns2" },
+      { value: "30", label: "z", source_name: "x", source_url: "https://example.com/ns3" },
+      { value: "40", label: "w", source_name: "x", source_url: "https://example.com/ns4" },
+    ],
+    field_note: ["Completely new field advice."],
+  };
+
+  const result = checkIssueFreshness(currentIssue, previousIssue);
+
+  assert.ok(result.similarGreetingBlurb !== null, "should flag similar greeting blurb");
+  assert.ok(result.similarGreetingBlurb!.similarity >= 0.35);
+  assert.equal(isIssueFreshEnough(result), false);
+});
+
+test("detects source URL recycling across multiple previous issues", () => {
+  const issue2: PreviousIssueContext = {
+    issueNumber: 2,
+    subjectLine: "Issue 2",
+    greetingBlurb: "Namaste. Market update for soil sensor companies.",
+    fieldNote: ["Issue 2 note."],
+    stories: [
+      {
+        section: "india",
+        headline: "Soil sensor pilot launches in Telangana",
+        sourceUrls: ["https://example.com/recycled-url"],
+      },
+    ],
+    stats: [
+      { value: "A", label: "old-a", sourceUrl: "https://example.com/old-stat-a" },
+      { value: "B", label: "old-b", sourceUrl: "https://example.com/old-stat-b" },
+      { value: "C", label: "old-c", sourceUrl: "https://example.com/old-stat-c" },
+      { value: "D", label: "old-d", sourceUrl: "https://example.com/old-stat-d" },
+    ],
+  };
+
+  const issue3: PreviousIssueContext = {
+    issueNumber: 3,
+    subjectLine: "Issue 3",
+    greetingBlurb: "Namaste. Research breakthroughs in canopy analysis tools.",
+    fieldNote: ["Issue 3 note."],
+    stories: [
+      {
+        section: "forestry",
+        headline: "Different headline about canopy",
+        sourceUrls: ["https://example.com/issue-3-url"],
+      },
+    ],
+    stats: [
+      { value: "E", label: "newer-e", sourceUrl: "https://example.com/newer-stat-e" },
+      { value: "F", label: "newer-f", sourceUrl: "https://example.com/newer-stat-f" },
+      { value: "G", label: "newer-g", sourceUrl: "https://example.com/newer-stat-g" },
+      { value: "H", label: "newer-h", sourceUrl: "https://example.com/newer-stat-h" },
+    ],
+  };
+
+  const currentIssue: IssueData = {
+    issue_number: 4,
+    subject_line: "New subject line for issue 4",
+    greeting_blurb: "Namaste. Student fellowships in precision agriculture are seeing record applications this spring.",
+    stories: [
+      {
+        section: "india",
+        tag: "SENSORS",
+        headline: "Completely new headline about drone mapping",
+        paragraphs: ["p1", "p2"],
+        // This URL appeared in issue 2, not issue 3 — multi-issue check should catch it
+        sources: [{ name: "Gov", url: "https://example.com/recycled-url" }],
+      },
+    ],
+    stats: [
+      { value: "100", label: "z", source_name: "x", source_url: "https://example.com/ns1" },
+      { value: "200", label: "y", source_name: "x", source_url: "https://example.com/ns2" },
+      { value: "300", label: "x", source_name: "x", source_url: "https://example.com/ns3" },
+      { value: "400", label: "w", source_name: "x", source_url: "https://example.com/ns4" },
+    ],
+    field_note: ["Different field note."],
+  };
+
+  // Pass array: most recent first (issue 3 then issue 2)
+  const result = checkIssueFreshness(currentIssue, [issue3, issue2]);
+
+  assert.equal(result.duplicateSourceUrlMatches.length, 1, "should catch recycled URL from issue 2");
+  assert.equal(result.duplicateSourceUrlMatches[0]!.sourceUrl, "https://example.com/recycled-url");
+  assert.equal(isIssueFreshEnough(result), false);
+});
+
+test("handles null previous issues gracefully", () => {
+  const currentIssue: IssueData = {
+    issue_number: 1,
+    subject_line: "First issue ever",
+    greeting_blurb: "Namaste. Welcome to the very first AI Green Wire.",
+    stories: [],
+    stats: [
+      { value: "1", label: "a", source_name: "x", source_url: "https://example.com/1" },
+    ],
+    field_note: ["First note."],
+  };
+
+  const result = checkIssueFreshness(currentIssue, null);
+
+  assert.equal(result.duplicateSourceUrlMatches.length, 0);
+  assert.equal(result.duplicateStatMatches.length, 0);
+  assert.equal(result.similarFieldNote, null);
+  assert.equal(result.similarGreetingBlurb, null);
+  assert.equal(isIssueFreshEnough(result), true);
+});
+
+test("handles empty previous issues array gracefully", () => {
+  const currentIssue: IssueData = {
+    issue_number: 1,
+    subject_line: "First issue ever",
+    greeting_blurb: "Namaste. Welcome to the very first AI Green Wire.",
+    stories: [],
+    stats: [
+      { value: "1", label: "a", source_name: "x", source_url: "https://example.com/1" },
+    ],
+    field_note: ["First note."],
+  };
+
+  const result = checkIssueFreshness(currentIssue, []);
+
   assert.equal(isIssueFreshEnough(result), true);
 });

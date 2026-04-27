@@ -10,6 +10,11 @@ export type PreviousIssueContext = {
     headline: string;
     sourceUrls: string[];
   }>;
+  stats: Array<{
+    value: string;
+    label: string;
+    sourceUrl: string;
+  }>;
 };
 
 export type OpeningLens =
@@ -50,6 +55,22 @@ export type FreshnessCheckResult = {
     structure: string;
     currentOpeningSentence: string;
     previousOpeningSentence: string;
+  } | null;
+  duplicateStatMatches: Array<{
+    currentValue: string;
+    currentLabel: string;
+    previousValue: string;
+    previousLabel: string;
+  }>;
+  similarFieldNote: {
+    similarity: number;
+    currentFieldNote: string;
+    previousFieldNote: string;
+  } | null;
+  similarGreetingBlurb: {
+    similarity: number;
+    currentGreetingBlurb: string;
+    previousGreetingBlurb: string;
   } | null;
 };
 
@@ -327,88 +348,222 @@ function jaccardSimilarity(left: Set<string>, right: Set<string>): number {
   return union === 0 ? 0 : intersection / union;
 }
 
-export function buildPreviousIssuePromptBlock(context: PreviousIssueContext): string {
-  const previousOpeningSentence = getOpeningSentence(context.greetingBlurb);
-  const previousOpeningLens = classifyOpeningLens(context.greetingBlurb);
-  const previousOpeningEntity = extractLeadOpeningEntity(previousOpeningSentence);
-  const storyLines = context.stories
-    .map(
-      (story, index) =>
-        `${index + 1}. [${story.section}] ${story.headline}${
-          story.sourceUrls[0] ? ` (${story.sourceUrls[0]})` : ""
-        }`
-    )
-    .join("\n");
+export function buildPreviousIssuePromptBlock(
+  contextOrContexts: PreviousIssueContext | PreviousIssueContext[]
+): string {
+  const contexts = Array.isArray(contextOrContexts) ? contextOrContexts : [contextOrContexts];
+  if (contexts.length === 0) {
+    return "";
+  }
+
+  const blocks: string[] = [];
+
+  for (const context of contexts) {
+    const previousOpeningSentence = getOpeningSentence(context.greetingBlurb);
+    const previousOpeningLens = classifyOpeningLens(context.greetingBlurb);
+    const previousOpeningEntity = extractLeadOpeningEntity(previousOpeningSentence);
+    const storyLines = context.stories
+      .map(
+        (story, index) =>
+          `${index + 1}. [${story.section}] ${story.headline}${
+            story.sourceUrls[0] ? ` (${story.sourceUrls[0]})` : ""
+          }`
+      )
+      .join("\n");
+
+    const statLines = context.stats
+      .map(
+        (stat, index) =>
+          `${index + 1}. ${stat.value} — ${stat.label} (${stat.sourceUrl})`
+      )
+      .join("\n");
+
+    blocks.push(
+      [
+        `--- Issue ${context.issueNumber} (do not repeat) ---`,
+        `Subject line: ${context.subjectLine}`,
+        `Greeting blurb: ${context.greetingBlurb}`,
+        `Opening sentence: ${previousOpeningSentence}`,
+        `Opening lens: ${previousOpeningLens}`,
+        `Lead opening entity: ${previousOpeningEntity ?? "none"}`,
+        `Field note: ${context.fieldNote.join(" ")}`,
+        "Story headlines:",
+        storyLines,
+        "Stats (do NOT reuse):",
+        statLines,
+      ].join("\n")
+    );
+  }
+
+  const issueNumbers = contexts.map((c) => c.issueNumber).join(", ");
 
   return [
-    `Previous issue context to avoid repeating: issue ${context.issueNumber}.`,
-    `Previous subject line: ${context.subjectLine}`,
-    `Previous greeting blurb: ${context.greetingBlurb}`,
-    `Previous opening sentence: ${previousOpeningSentence}`,
-    `Previous opening lens: ${previousOpeningLens}`,
-    `Previous lead opening entity: ${previousOpeningEntity ?? "none"}`,
-    `Previous field note: ${context.fieldNote.join(" ")}`,
-    "Do not reuse the same anchor topics, same angle, same framing, or the same primary source URLs unless there is a materially new development that clearly advances the story.",
+    `Previous issue context to avoid repeating: issues ${issueNumbers}.`,
+    ...blocks,
+    "--- Freshness rules ---",
+    "Do not reuse the same anchor topics, same angle, same framing, or the same primary source URLs from ANY of the above issues unless there is a materially new development that clearly advances the story.",
     "Every story in the new issue must either come from the past 7 days or be an explicit follow-on where the headline and paragraphs clearly state what changed since last week.",
     "Rewrite the editorial framing each week: vary the subject line angle, the greeting emphasis, and the field note advice so readers do not feel they are reading the same issue twice.",
     "Opening freshness rule: do not lead with the same person, institution, programme, ministry, or state in consecutive issues unless there is a materially larger follow-on event. Rotate the opening lens across policy, field impact, research breakthrough, market movement, and student opportunity. Do not reuse formulaic structures such as 'This week marks...' or 'This week marked...'.",
-    "Previous story headlines:",
-    storyLines,
+    "Stats freshness rule: every stat in the new issue must be different from ALL recent issues listed above. Do not reuse any stat value, label, or source URL. Find completely new data points from the past 7 days.",
+    "Field note freshness rule: the sandalwood/agroforestry advice must be substantially different from ALL recent issues. Cover a different aspect, season, or practice. Do not rephrase the same advice.",
   ].join("\n");
+}
+
+function normalizeStatFingerprint(value: string, label: string): string {
+  return normalizeWhitespace(`${value} ${label}`)
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export function checkIssueFreshness(
   currentIssue: IssueData,
-  previousIssue: PreviousIssueContext | null
+  previousIssueOrIssues: PreviousIssueContext | PreviousIssueContext[] | null
 ): FreshnessCheckResult {
-  if (!previousIssue) {
-    return {
-      duplicateSourceUrlMatches: [],
-      similarHeadlineMatches: [],
-      similarSubjectLine: null,
-      repeatedOpeningEntity: null,
-      repeatedOpeningLens: null,
-      repeatedOpeningStructure: null,
-    };
+  const emptyResult: FreshnessCheckResult = {
+    duplicateSourceUrlMatches: [],
+    similarHeadlineMatches: [],
+    similarSubjectLine: null,
+    repeatedOpeningEntity: null,
+    repeatedOpeningLens: null,
+    repeatedOpeningStructure: null,
+    duplicateStatMatches: [],
+    similarFieldNote: null,
+    similarGreetingBlurb: null,
+  };
+
+  if (!previousIssueOrIssues) {
+    return emptyResult;
   }
+
+  const previousIssues = Array.isArray(previousIssueOrIssues)
+    ? previousIssueOrIssues
+    : [previousIssueOrIssues];
+
+  if (previousIssues.length === 0) {
+    return emptyResult;
+  }
+
+  // The most recent previous issue is used for opening-level (editorial) checks
+  const mostRecent = previousIssues[0]!;
 
   const duplicateSourceUrlMatches: FreshnessCheckResult["duplicateSourceUrlMatches"] = [];
   const similarHeadlineMatches: FreshnessCheckResult["similarHeadlineMatches"] = [];
+  const duplicateStatMatches: FreshnessCheckResult["duplicateStatMatches"] = [];
+
+  // Opening-level checks only against most recent issue (N-1)
   const currentOpeningSentence = getOpeningSentence(currentIssue.greeting_blurb);
-  const previousOpeningSentence = getOpeningSentence(previousIssue.greetingBlurb);
+  const previousOpeningSentence = getOpeningSentence(mostRecent.greetingBlurb);
   const currentOpeningEntity = extractLeadOpeningEntity(currentOpeningSentence);
   const previousOpeningEntity = extractLeadOpeningEntity(previousOpeningSentence);
   const currentOpeningLens = classifyOpeningLens(currentIssue.greeting_blurb);
-  const previousOpeningLens = classifyOpeningLens(previousIssue.greetingBlurb);
+  const previousOpeningLens = classifyOpeningLens(mostRecent.greetingBlurb);
   const currentOpeningStructure = extractOpeningStructure(currentOpeningSentence);
   const previousOpeningStructure = extractOpeningStructure(previousOpeningSentence);
   const subjectSimilarity = jaccardSimilarity(
     uniqueTokens(currentIssue.subject_line),
-    uniqueTokens(previousIssue.subjectLine)
+    uniqueTokens(mostRecent.subjectLine)
   );
 
-  for (const story of currentIssue.stories) {
-    const storySourceUrls = new Set(story.sources.map((source) => source.url.trim()));
-    const currentTokens = uniqueTokens(story.headline);
+  // Content-level checks against ALL previous issues
+  for (const previousIssue of previousIssues) {
+    for (const story of currentIssue.stories) {
+      const storySourceUrls = new Set(story.sources.map((source) => source.url.trim()));
+      const currentTokens = uniqueTokens(story.headline);
 
-    for (const previousStory of previousIssue.stories) {
-      const sharedSourceUrl = previousStory.sourceUrls.find((url) => storySourceUrls.has(url));
-      if (sharedSourceUrl) {
-        duplicateSourceUrlMatches.push({
-          currentHeadline: story.headline,
-          previousHeadline: previousStory.headline,
-          sourceUrl: sharedSourceUrl,
-        });
-      }
+      for (const previousStory of previousIssue.stories) {
+        const sharedSourceUrl = previousStory.sourceUrls.find((url) => storySourceUrls.has(url));
+        if (sharedSourceUrl) {
+          const alreadyLogged = duplicateSourceUrlMatches.some(
+            (m) => m.sourceUrl === sharedSourceUrl && m.currentHeadline === story.headline
+          );
+          if (!alreadyLogged) {
+            duplicateSourceUrlMatches.push({
+              currentHeadline: story.headline,
+              previousHeadline: previousStory.headline,
+              sourceUrl: sharedSourceUrl,
+            });
+          }
+        }
 
-      const similarity = jaccardSimilarity(currentTokens, uniqueTokens(previousStory.headline));
-      if (similarity >= 0.34) {
-        similarHeadlineMatches.push({
-          currentHeadline: story.headline,
-          previousHeadline: previousStory.headline,
-          similarity,
-        });
+        const similarity = jaccardSimilarity(currentTokens, uniqueTokens(previousStory.headline));
+        if (similarity >= 0.34) {
+          const alreadyLogged = similarHeadlineMatches.some(
+            (m) => m.currentHeadline === story.headline && m.previousHeadline === previousStory.headline
+          );
+          if (!alreadyLogged) {
+            similarHeadlineMatches.push({
+              currentHeadline: story.headline,
+              previousHeadline: previousStory.headline,
+              similarity,
+            });
+          }
+        }
       }
+    }
+
+    // Stats checks against all previous issues
+    const previousStatFingerprints = new Set(
+      previousIssue.stats.map((stat) => normalizeStatFingerprint(stat.value, stat.label))
+    );
+    const previousStatSourceUrls = new Set(
+      previousIssue.stats.map((stat) => stat.sourceUrl.trim())
+    );
+
+    for (const stat of currentIssue.stats) {
+      const currentFingerprint = normalizeStatFingerprint(stat.value, stat.label);
+      const currentSourceUrl = stat.source_url.trim();
+
+      if (previousStatFingerprints.has(currentFingerprint) || previousStatSourceUrls.has(currentSourceUrl)) {
+        const matchedPrevStat = previousIssue.stats.find(
+          (prev) =>
+            normalizeStatFingerprint(prev.value, prev.label) === currentFingerprint ||
+            prev.sourceUrl.trim() === currentSourceUrl
+        );
+        if (matchedPrevStat) {
+          const alreadyLogged = duplicateStatMatches.some(
+            (m) => m.currentValue === stat.value && m.currentLabel === stat.label &&
+              m.previousValue === matchedPrevStat.value && m.previousLabel === matchedPrevStat.label
+          );
+          if (!alreadyLogged) {
+            duplicateStatMatches.push({
+              currentValue: stat.value,
+              currentLabel: stat.label,
+              previousValue: matchedPrevStat.value,
+              previousLabel: matchedPrevStat.label,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // Field note and greeting similarity — check against the most similar previous issue
+  let worstFieldNoteSimilarity = 0;
+  let worstFieldNotePreviousText = "";
+  let worstGreetingSimilarity = 0;
+  let worstGreetingPreviousText = "";
+  const currentFieldNoteText = currentIssue.field_note.join(" ");
+
+  for (const previousIssue of previousIssues) {
+    const previousFieldNoteText = previousIssue.fieldNote.join(" ");
+    const fieldNoteSim = jaccardSimilarity(
+      uniqueTokens(currentFieldNoteText),
+      uniqueTokens(previousFieldNoteText)
+    );
+    if (fieldNoteSim > worstFieldNoteSimilarity) {
+      worstFieldNoteSimilarity = fieldNoteSim;
+      worstFieldNotePreviousText = previousFieldNoteText;
+    }
+
+    const greetingSim = jaccardSimilarity(
+      uniqueTokens(currentIssue.greeting_blurb),
+      uniqueTokens(previousIssue.greetingBlurb)
+    );
+    if (greetingSim > worstGreetingSimilarity) {
+      worstGreetingSimilarity = greetingSim;
+      worstGreetingPreviousText = previousIssue.greetingBlurb;
     }
   }
 
@@ -419,7 +574,7 @@ export function checkIssueFreshness(
       subjectSimilarity >= 0.4
         ? {
             currentSubjectLine: currentIssue.subject_line,
-            previousSubjectLine: previousIssue.subjectLine,
+            previousSubjectLine: mostRecent.subjectLine,
             similarity: subjectSimilarity,
           }
         : null,
@@ -451,6 +606,23 @@ export function checkIssueFreshness(
             previousOpeningSentence,
           }
         : null,
+    duplicateStatMatches,
+    similarFieldNote:
+      worstFieldNoteSimilarity >= 0.30
+        ? {
+            similarity: worstFieldNoteSimilarity,
+            currentFieldNote: currentFieldNoteText,
+            previousFieldNote: worstFieldNotePreviousText,
+          }
+        : null,
+    similarGreetingBlurb:
+      worstGreetingSimilarity >= 0.35
+        ? {
+            similarity: worstGreetingSimilarity,
+            currentGreetingBlurb: currentIssue.greeting_blurb,
+            previousGreetingBlurb: worstGreetingPreviousText,
+          }
+        : null,
   };
 }
 
@@ -461,6 +633,9 @@ export function isIssueFreshEnough(result: FreshnessCheckResult): boolean {
   const repeatedOpeningEntity = result.repeatedOpeningEntity !== null;
   const repeatedOpeningLens = result.repeatedOpeningLens !== null;
   const repeatedOpeningStructure = result.repeatedOpeningStructure !== null;
+  const duplicateStats = result.duplicateStatMatches.length;
+  const similarFieldNote = result.similarFieldNote !== null;
+  const similarGreetingBlurb = result.similarGreetingBlurb !== null;
 
   return (
     duplicateSources === 0 &&
@@ -468,7 +643,10 @@ export function isIssueFreshEnough(result: FreshnessCheckResult): boolean {
     !similarSubjectLine &&
     !repeatedOpeningEntity &&
     !repeatedOpeningLens &&
-    !repeatedOpeningStructure
+    !repeatedOpeningStructure &&
+    duplicateStats === 0 &&
+    !similarFieldNote &&
+    !similarGreetingBlurb
   );
 }
 
@@ -519,6 +697,29 @@ export function formatFreshnessFailure(result: FreshnessCheckResult): string {
   if (result.repeatedOpeningStructure) {
     lines.push(
       `repeated opening structure: ${result.repeatedOpeningStructure.structure} (${result.repeatedOpeningStructure.currentOpeningSentence} <-> ${result.repeatedOpeningStructure.previousOpeningSentence})`
+    );
+  }
+
+  if (result.duplicateStatMatches.length > 0) {
+    lines.push(
+      `duplicate stats: ${result.duplicateStatMatches
+        .map(
+          (match) =>
+            `${match.currentValue} "${match.currentLabel}" <-> ${match.previousValue} "${match.previousLabel}"`
+        )
+        .join("; ")}`
+    );
+  }
+
+  if (result.similarFieldNote) {
+    lines.push(
+      `similar field note (${result.similarFieldNote.similarity.toFixed(2)})`
+    );
+  }
+
+  if (result.similarGreetingBlurb) {
+    lines.push(
+      `similar greeting blurb (${result.similarGreetingBlurb.similarity.toFixed(2)})`
     );
   }
 

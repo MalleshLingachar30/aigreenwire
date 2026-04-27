@@ -120,17 +120,31 @@ function isUniqueViolation(error: unknown): boolean {
   return error.message.toLowerCase().includes("duplicate key value");
 }
 
+async function cleanUpStaleDrafts(): Promise<number> {
+  const rows = (await sql`
+    DELETE FROM issues
+    WHERE status IN ('draft', 'failed')
+      AND generated_at < NOW() - INTERVAL '24 hours'
+    RETURNING id
+  `) as Array<{ id: string }>;
+
+  return rows.length;
+}
+
 async function getNextIssueNumber(): Promise<number> {
   const rows = (await sql`
     SELECT COALESCE(MAX(issue_number), 0) AS max_issue_number
     FROM issues
+    WHERE status = 'sent'
   `) as MaxIssueNumberRow[];
 
   const max = Number(rows[0]?.max_issue_number ?? 0);
   return Number.isFinite(max) ? max + 1 : 1;
 }
 
-async function getPreviousIssueContext(nextIssueNumber: number): Promise<PreviousIssueContext | null> {
+const PREVIOUS_ISSUES_LOOKBACK = 3;
+
+async function getPreviousIssueContexts(nextIssueNumber: number): Promise<PreviousIssueContext[]> {
   const rows = (await sql`
     SELECT
       issue_number,
@@ -139,43 +153,47 @@ async function getPreviousIssueContext(nextIssueNumber: number): Promise<Previou
       stories_json
     FROM issues
     WHERE issue_number < ${nextIssueNumber}
+      AND status = 'sent'
     ORDER BY issue_number DESC
-    LIMIT 1
+    LIMIT ${PREVIOUS_ISSUES_LOOKBACK}
   `) as PreviousIssueRow[];
 
-  const previous = rows[0];
-  if (!previous) {
-    return null;
-  }
+  return rows.map((previous) => {
+    const parsed = sanitizeIssueData(
+      JSON.parse(
+        typeof previous.stories_json === "string"
+          ? previous.stories_json
+          : JSON.stringify(previous.stories_json)
+      ) as IssueData
+    );
 
-  const parsed = sanitizeIssueData(
-    JSON.parse(
-      typeof previous.stories_json === "string"
-        ? previous.stories_json
-        : JSON.stringify(previous.stories_json)
-    ) as IssueData
-  );
-
-  return {
-    issueNumber: Number(previous.issue_number),
-    subjectLine: previous.subject_line,
-    greetingBlurb: previous.greeting_blurb,
-    fieldNote: parsed.field_note,
-    stories: parsed.stories.map((story) => ({
-      section: story.section,
-      headline: story.headline,
-      sourceUrls: story.sources.map((source) => source.url),
-    })),
-  };
+    return {
+      issueNumber: Number(previous.issue_number),
+      subjectLine: previous.subject_line,
+      greetingBlurb: previous.greeting_blurb,
+      fieldNote: parsed.field_note,
+      stories: parsed.stories.map((story) => ({
+        section: story.section,
+        headline: story.headline,
+        sourceUrls: story.sources.map((source) => source.url),
+      })),
+      stats: parsed.stats.map((stat) => ({
+        value: stat.value,
+        label: stat.label,
+        sourceUrl: stat.source_url,
+      })),
+    };
+  });
 }
 
 async function generateFreshIssue(issueNumber: number): Promise<IssueData> {
-  const previousIssue = await getPreviousIssueContext(issueNumber);
+  const previousIssues = await getPreviousIssueContexts(issueNumber);
+  const previousIssueForPrompt = previousIssues.length > 0 ? previousIssues : null;
   let lastFailure = "";
 
   for (let attempt = 0; attempt < MAX_GENERATION_ATTEMPTS; attempt += 1) {
-    const generated = await generateIssue(issueNumber, { previousIssue });
-    const freshness = checkIssueFreshness(generated, previousIssue);
+    const generated = await generateIssue(issueNumber, { previousIssues: previousIssueForPrompt });
+    const freshness = checkIssueFreshness(generated, previousIssueForPrompt);
 
     if (isIssueFreshEnough(freshness)) {
       return generated;
@@ -307,6 +325,11 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const staleDraftsRemoved = await cleanUpStaleDrafts();
+    if (staleDraftsRemoved > 0) {
+      console.log(`[cron] Cleaned up ${staleDraftsRemoved} stale draft/failed issue(s).`);
+    }
+
     const editorEmail = getEditorEmail();
     const nextIssueNumber = await getNextIssueNumber();
     const generated = await generateFreshIssue(nextIssueNumber);

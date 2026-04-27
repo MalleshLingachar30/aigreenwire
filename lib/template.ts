@@ -5,6 +5,34 @@ const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://aigreenwire.com")
 const LOGO_URL = `${SITE_URL}/assets/grobet-logo.png`;
 const PHOTO_URL = `${SITE_URL}/assets/mallesh.jpg`;
 
+const FIELD_NOTE_HEADINGS = [
+  "Grower\u2019s radar this week",
+  "Sandalwood &amp; agroforestry corner",
+  "This week\u2019s field note",
+  "On the ground for growers",
+  "Agroforestry takeaway",
+];
+
+const EDITOR_BLURBS = [
+  "Every week I read through roughly three hundred signals on AI, agriculture and forestry so you do not have to. If a development changes how I think about the land, it finds its way into this briefing. Reply and tell me what you would like covered next week.",
+  "Three hundred signals. Nine stories. One briefing. That is the weekly distillation I promise you. Hit reply if there is a topic you want me to dig into.",
+  "I sift through hundreds of research papers, policy briefs and market signals each week to bring you the developments that matter for Indian growers. Let me know what you think.",
+  "Each week I track AI developments across agriculture, forestry and ecology so you can focus on the field. Reply with what you would like to see next.",
+  "From lab papers to farm gates \u2014 I read the signals so you can act on them. If something is missing from this briefing, just reply.",
+];
+
+const PAGE_BREAK_LABELS = [
+  "\u2014 Page Two \u00B7 The Numbers &amp; What\u2019s Next \u2014",
+  "\u2014 Data &amp; Outlook \u2014",
+  "\u2014 By the Numbers \u2014",
+  "\u2014 This Week\u2019s Data &amp; Directions \u2014",
+  "\u2014 Numbers &amp; Next Steps \u2014",
+];
+
+function pickByIssueNumber<T>(items: T[], issueNumber: number): T {
+  return items[issueNumber % items.length] as T;
+}
+
 function weekRange(d: Date): string {
   const start = new Date(d);
   start.setDate(d.getDate() - 6);
@@ -162,7 +190,7 @@ ${viewInBrowser}
     ${forestryStories.map(renderStoryCard).join("")}
 
     <div style="text-align:center;margin:32px 0 24px;font-size:10px;color:#97C459;letter-spacing:3px;text-transform:uppercase;">
-      — Page Two · The Numbers &amp; What's Next —
+      ${pickByIssueNumber(PAGE_BREAK_LABELS, safeData.issue_number)}
     </div>
 
     <div style="display:table;width:100%;margin:26px 0 14px;">
@@ -185,7 +213,7 @@ ${viewInBrowser}
     </table>
 
     <div style="background:#FAEEDA;border-radius:10px;padding:18px 20px;margin:22px 0;">
-      <div style="font-size:11px;color:#854F0B;letter-spacing:1.5px;text-transform:uppercase;font-weight:500;margin-bottom:8px;">If you grow sandalwood, pay attention to this</div>
+      <div style="font-size:11px;color:#854F0B;letter-spacing:1.5px;text-transform:uppercase;font-weight:500;margin-bottom:8px;">${pickByIssueNumber(FIELD_NOTE_HEADINGS, safeData.issue_number)}</div>
       ${safeData.field_note
         .map(
           (paragraph) =>
@@ -218,7 +246,7 @@ ${viewInBrowser}
       </td>
     </tr></table>
     <div style="font-size:13px;color:#C0DD97;margin-top:14px;line-height:1.65;font-style:italic;">
-      Every week I read through roughly three hundred signals on AI, agriculture and forestry so you do not have to. If a development changes how I think about the land, it finds its way into this briefing. Reply and tell me what you would like covered next week.
+      ${pickByIssueNumber(EDITOR_BLURBS, safeData.issue_number)}
     </div>
     <div style="font-size:10px;color:#97C459;margin-top:14px;border-top:0.5px solid #3B6D11;padding-top:10px;text-align:center;line-height:1.6;">
       Published weekly by Grobet India Agrotech Pvt Ltd (CIN U62090KA2023PTC170106) · Bengaluru<br />

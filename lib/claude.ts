@@ -32,7 +32,9 @@ export type IssueData = {
 };
 
 type GenerateIssueOptions = {
+  /** @deprecated Use previousIssues instead */
   previousIssue?: PreviousIssueContext | null;
+  previousIssues?: PreviousIssueContext[] | null;
 };
 
 const RESEARCH_PROMPT = `You are the research editor for "The AI Green Wire", a weekly newsletter published by Grobet India Agrotech covering AI developments in agriculture, agroforestry, forestry, biodiversity, and ecology — with special emphasis on India and Indian growers.
@@ -280,8 +282,9 @@ export async function generateIssue(
   issueNumber: number,
   options?: GenerateIssueOptions
 ): Promise<IssueData> {
-  const previousIssuePrompt = options?.previousIssue
-    ? `\n\n${buildPreviousIssuePromptBlock(options.previousIssue)}`
+  const previousContexts = options?.previousIssues ?? (options?.previousIssue ? [options.previousIssue] : null);
+  const previousIssuePrompt = previousContexts && previousContexts.length > 0
+    ? `\n\n${buildPreviousIssuePromptBlock(previousContexts)}`
     : "";
 
   const response = await anthropic.messages.create({
