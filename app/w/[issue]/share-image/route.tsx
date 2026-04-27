@@ -211,12 +211,12 @@ export async function GET(
                     : 430;
             const top =
               language === "kn"
-                ? 120
+                ? 84
                 : language === "te"
-                  ? 64
+                  ? 28
                   : language === "ta"
-                    ? 150
-                    : 90;
+                    ? 112
+                    : 56;
 
             return (
               <div
@@ -308,7 +308,7 @@ export async function GET(
               display: "flex",
               position: "absolute",
               right: "22px",
-              bottom: "18px",
+              bottom: "10px",
               padding: "14px 18px",
               borderRadius: "18px",
               background: "rgba(255,255,255,0.14)",
