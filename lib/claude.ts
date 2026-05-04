@@ -2,8 +2,12 @@ import Anthropic from "@anthropic-ai/sdk";
 import { sanitizeIssueData, stripCitationMarkup } from "@/lib/citation-sanitize";
 import { buildPreviousIssuePromptBlock, type PreviousIssueContext } from "@/lib/issue-freshness";
 
+const ANTHROPIC_REQUEST_TIMEOUT_MS = 95_000;
+
 export const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
+  maxRetries: 0,
+  timeout: ANTHROPIC_REQUEST_TIMEOUT_MS,
 });
 
 export const ISSUE_GENERATION_MODEL = "claude-sonnet-4-6";
@@ -455,6 +459,7 @@ export async function generateIssue(
       JSON.stringify({
         issueNumber,
         model: ISSUE_GENERATION_MODEL,
+        timeoutMs: ANTHROPIC_REQUEST_TIMEOUT_MS,
         hasApiKey: Boolean(process.env.ANTHROPIC_API_KEY),
         previousIssueCount: previousContexts?.length ?? 0,
         error: serializeErrorForLog(error),
