@@ -1,6 +1,7 @@
 import type { IssueData, Story } from "@/lib/claude";
 import { sql } from "@/lib/db";
 import { stripCitationMarkup } from "@/lib/citation-sanitize";
+import { isLanguage, type Language } from "@/lib/whatsapp-cards";
 
 export type ArchiveIssue = {
   id: string;
@@ -13,6 +14,7 @@ export type ArchiveIssue = {
   approvedAt: string | null;
   sentAt: string | null;
   publishedAt: string;
+  availableCardLanguages: Language[];
   data: IssueData;
   htmlRendered: string;
 };
@@ -30,6 +32,7 @@ type ArchiveIssueRow = {
   generated_at: string;
   approved_at: string | null;
   sent_at: string | null;
+  card_languages: unknown;
 };
 
 const DEFAULT_LIST_LIMIT = 30;
@@ -125,6 +128,14 @@ function parseStory(input: unknown): Story | null {
     ...(action ? { action } : {}),
     sources,
   };
+}
+
+function parseCardLanguages(value: unknown): Language[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((language): language is Language => isLanguage(language));
 }
 
 function parseIssueData(
@@ -248,6 +259,7 @@ function mapArchiveIssue(row: ArchiveIssueRow): ArchiveIssue | null {
     approvedAt: row.approved_at,
     sentAt: row.sent_at,
     publishedAt,
+    availableCardLanguages: parseCardLanguages(row.card_languages),
     data: issueData,
     htmlRendered: stripCitationMarkup(row.html_rendered),
   };
@@ -299,7 +311,15 @@ export async function listArchiveIssues(limit?: number): Promise<ArchiveIssue[]>
       status,
       generated_at::text AS generated_at,
       approved_at::text AS approved_at,
-      sent_at::text AS sent_at
+      sent_at::text AS sent_at,
+      COALESCE(
+        (
+          SELECT array_agg(DISTINCT language ORDER BY language)
+          FROM whatsapp_cards
+          WHERE issue_number = issues.issue_number
+        ),
+        ARRAY[]::text[]
+      ) AS card_languages
     FROM issues
     WHERE status IN ('approved', 'sent')
     ORDER BY COALESCE(sent_at, approved_at, generated_at) DESC, issue_number DESC
@@ -327,7 +347,15 @@ export async function getArchiveIssueBySlug(
       status,
       generated_at::text AS generated_at,
       approved_at::text AS approved_at,
-      sent_at::text AS sent_at
+      sent_at::text AS sent_at,
+      COALESCE(
+        (
+          SELECT array_agg(DISTINCT language ORDER BY language)
+          FROM whatsapp_cards
+          WHERE issue_number = issues.issue_number
+        ),
+        ARRAY[]::text[]
+      ) AS card_languages
     FROM issues
     WHERE slug = ${slug}
       AND status IN ('approved', 'sent')

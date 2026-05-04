@@ -5,6 +5,7 @@ import {
   formatArchiveDate,
   getArchiveIssueBySlug,
 } from "@/lib/archive";
+import { WhatsAppCardLinks } from "../whatsapp-card-links";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,12 @@ export default async function IssuePage({ params, searchParams }: IssuePageProps
           <span className="text-slate-600">
             Published {formatArchiveDate(issue.publishedAt)}
           </span>
+        </div>
+        <div className="mt-4">
+          <WhatsAppCardLinks
+            issueNumber={issue.issueNumber}
+            languages={issue.availableCardLanguages}
+          />
         </div>
         <section
           className="mt-6 [&_a:hover]:opacity-85"

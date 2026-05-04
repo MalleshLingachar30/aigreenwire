@@ -5,6 +5,7 @@ import {
   listArchiveIssues,
 } from "@/lib/archive";
 import { requireArchiveAccess } from "@/lib/archive-access";
+import { WhatsAppCardLinks } from "./whatsapp-card-links";
 
 export const dynamic = "force-dynamic";
 
@@ -82,6 +83,12 @@ export default async function IssuesPage({ searchParams }: IssuesPageProps) {
                 <p className="mt-3 text-sm text-slate-700">
                   {previewGreeting(issue.data.greeting_blurb)}
                 </p>
+                <div className="mt-4">
+                  <WhatsAppCardLinks
+                    issueNumber={issue.issueNumber}
+                    languages={issue.availableCardLanguages}
+                  />
+                </div>
               </article>
             ))}
           </section>
