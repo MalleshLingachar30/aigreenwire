@@ -50,7 +50,7 @@ type InsertedDraft = {
 };
 
 const MAX_INSERT_ATTEMPTS = 3;
-const MAX_GENERATION_ATTEMPTS = 2;
+const MAX_GENERATION_ATTEMPTS = 3;
 const DEFAULT_MODEL = ISSUE_GENERATION_MODEL;
 
 function getEditorEmail(): string {

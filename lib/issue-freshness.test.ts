@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   checkIssueFreshness,
   isIssueFreshEnough,
+  normalizeStatValue,
   type PreviousIssueContext,
 } from "@/lib/issue-freshness";
 import type { IssueData } from "@/lib/claude";
@@ -591,4 +592,65 @@ test("handles empty previous issues array gracefully", () => {
 
   assert.equal(result.repeatedTopicLaneMatches.length, 0);
   assert.equal(isIssueFreshEnough(result), true);
+});
+
+test("normalizeStatValue canonicalises currency and unit format variations", () => {
+  // Rupee variations
+  assert.equal(normalizeStatValue("₹70,000Cr"), "70000cr");
+  assert.equal(normalizeStatValue("₹70,000 crore"), "70000cr");
+  assert.equal(normalizeStatValue("₹70,000cr"), "70000cr");
+  assert.equal(normalizeStatValue("₹70000cr"), "70000cr");
+
+  // Dollar variations
+  assert.equal(normalizeStatValue("$20.7B"), "20.7b");
+  assert.equal(normalizeStatValue("$20.7 billion"), "20.7b");
+  assert.equal(normalizeStatValue("$30 million"), "30m");
+  assert.equal(normalizeStatValue("$30M"), "30m");
+
+  // Lakh variations
+  assert.equal(normalizeStatValue("95 lakh"), "95l");
+  assert.equal(normalizeStatValue("95 lakhs"), "95l");
+
+  // Plain numbers
+  assert.equal(normalizeStatValue("73%"), "73%");
+  assert.equal(normalizeStatValue("₹38,750"), "38750");
+});
+
+test("flags duplicate stats when only the numeric value matches across format variations", () => {
+  const previousIssue: PreviousIssueContext = {
+    issueNumber: 4,
+    subjectLine: "Previous issue",
+    greetingBlurb: "Namaste. Market movements in carbon credits this week.",
+    fieldNote: ["Old advice."],
+    stories: [],
+    stats: [
+      { value: "₹70,000Cr", label: "Potential annual farmer income boost from AI advisories", sourceUrl: "https://example.com/old-stat-1" },
+      { value: "$8.9B", label: "AI in agriculture market", sourceUrl: "https://example.com/old-stat-2" },
+      { value: "42%", label: "yield improvement", sourceUrl: "https://example.com/old-stat-3" },
+      { value: "95 lakh", label: "farmer queries", sourceUrl: "https://example.com/old-stat-4" },
+    ],
+  };
+
+  const currentIssue: IssueData = {
+    issue_number: 5,
+    subject_line: "New subject line",
+    greeting_blurb: "Namaste. A startup demonstrates remote sensing for soil health monitoring.",
+    stories: [],
+    stats: [
+      // Same number, different format and label, different URL
+      { value: "₹70,000 crore", label: "Annual value potential for farm holdings through AI", source_name: "x", source_url: "https://example.com/completely-different-url" },
+      // Completely new
+      { value: "15%", label: "efficiency gain", source_name: "x", source_url: "https://example.com/new-stat" },
+      { value: "200K", label: "sensors deployed", source_name: "x", source_url: "https://example.com/new-stat-2" },
+      { value: "3.2M", label: "hectares under monitoring", source_name: "x", source_url: "https://example.com/new-stat-3" },
+    ],
+    field_note: ["Completely different advice."],
+  };
+
+  const result = checkIssueFreshness(currentIssue, previousIssue);
+
+  assert.equal(result.duplicateStatMatches.length, 1, "should catch ₹70,000Cr vs ₹70,000 crore");
+  assert.equal(result.duplicateStatMatches[0]!.currentValue, "₹70,000 crore");
+  assert.equal(result.duplicateStatMatches[0]!.previousValue, "₹70,000Cr");
+  assert.equal(isIssueFreshEnough(result), false);
 });

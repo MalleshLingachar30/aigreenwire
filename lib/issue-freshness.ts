@@ -582,6 +582,25 @@ function normalizeStatFingerprint(value: string, label: string): string {
     .trim();
 }
 
+/**
+ * Extract a canonical numeric fingerprint from a stat value string so that
+ * format variations like ₹70,000Cr / ₹70,000 crore / ₹70000cr all resolve
+ * to the same token ("70000cr").
+ */
+export function normalizeStatValue(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[₹$€£]/g, "")
+    .replace(/,/g, "")
+    .replace(/\s+/g, "")
+    .replace(/crores?\b/g, "cr")
+    .replace(/billions?\b/g, "b")
+    .replace(/millions?\b/g, "m")
+    .replace(/lakhs?\b/g, "l")
+    .replace(/thousands?\b/g, "k")
+    .trim();
+}
+
 export function checkIssueFreshness(
   currentIssue: IssueData,
   previousIssueOrIssues: PreviousIssueContext | PreviousIssueContext[] | null
@@ -699,16 +718,25 @@ export function checkIssueFreshness(
     const previousStatSourceUrls = new Set(
       previousIssue.stats.map((stat) => stat.sourceUrl.trim())
     );
+    const previousStatValues = new Set(
+      previousIssue.stats.map((stat) => normalizeStatValue(stat.value))
+    );
 
     for (const stat of currentIssue.stats) {
       const currentFingerprint = normalizeStatFingerprint(stat.value, stat.label);
       const currentSourceUrl = stat.source_url.trim();
+      const currentStatValue = normalizeStatValue(stat.value);
 
-      if (previousStatFingerprints.has(currentFingerprint) || previousStatSourceUrls.has(currentSourceUrl)) {
+      if (
+        previousStatFingerprints.has(currentFingerprint) ||
+        previousStatSourceUrls.has(currentSourceUrl) ||
+        previousStatValues.has(currentStatValue)
+      ) {
         const matchedPrevStat = previousIssue.stats.find(
           (prev) =>
             normalizeStatFingerprint(prev.value, prev.label) === currentFingerprint ||
-            prev.sourceUrl.trim() === currentSourceUrl
+            prev.sourceUrl.trim() === currentSourceUrl ||
+            normalizeStatValue(prev.value) === currentStatValue
         );
         if (matchedPrevStat) {
           const alreadyLogged = duplicateStatMatches.some(
