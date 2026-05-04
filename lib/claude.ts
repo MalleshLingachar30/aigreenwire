@@ -37,6 +37,40 @@ type GenerateIssueOptions = {
   previousIssues?: PreviousIssueContext[] | null;
 };
 
+function serializeErrorForLog(error: unknown): Record<string, unknown> {
+  if (error instanceof Error) {
+    const typedError = error as Error & {
+      status?: number;
+      headers?: unknown;
+      request_id?: string;
+      type?: string;
+      error?: unknown;
+      cause?: unknown;
+    };
+
+    return {
+      name: typedError.name,
+      message: typedError.message,
+      stack: typedError.stack,
+      status: typedError.status,
+      request_id: typedError.request_id,
+      type: typedError.type,
+      error: typedError.error,
+      headers: typedError.headers,
+      cause:
+        typedError.cause instanceof Error
+          ? {
+              name: typedError.cause.name,
+              message: typedError.cause.message,
+              stack: typedError.cause.stack,
+            }
+          : typedError.cause,
+    };
+  }
+
+  return { value: error };
+}
+
 const RESEARCH_PROMPT = [
   'You are the research editor for "The AI Green Wire", a weekly newsletter published by Grobet India Agrotech covering AI developments in agriculture, agroforestry, forestry, biodiversity, and ecology — with special emphasis on India and Indian growers.',
   "",
@@ -320,99 +354,114 @@ export async function generateIssue(
     ? `\n\n${buildPreviousIssuePromptBlock(previousContexts)}`
     : "";
 
-  const response = await anthropic.messages.create({
-    model: ISSUE_GENERATION_MODEL,
-    // Keep output budget under Sonnet 4 OTPM while preserving issue quality.
-    max_tokens: 8000,
-    tools: [
-      {
-        type: "web_search_20250305",
-        name: "web_search",
-        max_uses: 4,
-      } as any,
-      {
-        name: "store_issue",
-        description: "Store the final AI Green Wire issue payload as strict JSON.",
-        input_schema: {
-          type: "object",
-          properties: {
-            issue_number: { type: "integer" },
-            subject_line: { type: "string" },
-            greeting_blurb: { type: "string" },
-            stories: {
-              type: "array",
-              minItems: 9,
-              maxItems: 9,
-              items: {
-                type: "object",
-                properties: {
-                  section: { type: "string", enum: ["india", "forestry", "students"] },
-                  tag: { type: "string" },
-                  headline: { type: "string" },
-                  paragraphs: {
-                    type: "array",
-                    minItems: 2,
-                    items: { type: "string" },
-                  },
-                  action: { type: ["string", "null"] as any },
-                  sources: {
-                    type: "array",
-                    minItems: 1,
-                    items: {
-                      type: "object",
-                      properties: {
-                        name: { type: "string" },
-                        url: { type: "string" },
+  let response;
+  try {
+    response = await anthropic.messages.create({
+      model: ISSUE_GENERATION_MODEL,
+      // Keep output budget under Sonnet 4 OTPM while preserving issue quality.
+      max_tokens: 8000,
+      tools: [
+        {
+          type: "web_search_20250305",
+          name: "web_search",
+          max_uses: 4,
+        } as any,
+        {
+          name: "store_issue",
+          description: "Store the final AI Green Wire issue payload as strict JSON.",
+          input_schema: {
+            type: "object",
+            properties: {
+              issue_number: { type: "integer" },
+              subject_line: { type: "string" },
+              greeting_blurb: { type: "string" },
+              stories: {
+                type: "array",
+                minItems: 9,
+                maxItems: 9,
+                items: {
+                  type: "object",
+                  properties: {
+                    section: { type: "string", enum: ["india", "forestry", "students"] },
+                    tag: { type: "string" },
+                    headline: { type: "string" },
+                    paragraphs: {
+                      type: "array",
+                      minItems: 2,
+                      items: { type: "string" },
+                    },
+                    action: { type: ["string", "null"] as any },
+                    sources: {
+                      type: "array",
+                      minItems: 1,
+                      items: {
+                        type: "object",
+                        properties: {
+                          name: { type: "string" },
+                          url: { type: "string" },
+                        },
+                        required: ["name", "url"],
                       },
-                      required: ["name", "url"],
                     },
                   },
+                  required: ["section", "tag", "headline", "paragraphs", "sources"],
                 },
-                required: ["section", "tag", "headline", "paragraphs", "sources"],
+              },
+              stats: {
+                type: "array",
+                minItems: 4,
+                maxItems: 4,
+                items: {
+                  type: "object",
+                  properties: {
+                    value: { type: "string" },
+                    label: { type: "string" },
+                    source_name: { type: "string" },
+                    source_url: { type: "string" },
+                  },
+                  required: ["value", "label", "source_name", "source_url"],
+                },
+              },
+              field_note: {
+                type: "array",
+                minItems: 2,
+                maxItems: 2,
+                items: { type: "string" },
               },
             },
-            stats: {
-              type: "array",
-              minItems: 4,
-              maxItems: 4,
-              items: {
-                type: "object",
-                properties: {
-                  value: { type: "string" },
-                  label: { type: "string" },
-                  source_name: { type: "string" },
-                  source_url: { type: "string" },
-                },
-                required: ["value", "label", "source_name", "source_url"],
-              },
-            },
-            field_note: {
-              type: "array",
-              minItems: 2,
-              maxItems: 2,
-              items: { type: "string" },
-            },
+            required: [
+              "issue_number",
+              "subject_line",
+              "greeting_blurb",
+              "stories",
+              "stats",
+              "field_note",
+            ],
           },
-          required: [
-            "issue_number",
-            "subject_line",
-            "greeting_blurb",
-            "stories",
-            "stats",
-            "field_note",
-          ],
         },
-      },
-    ],
-    messages: [
-      {
-        role: "user",
-        content: `${RESEARCH_PROMPT}\n\nGenerate the content for issue_number: ${issueNumber}. Today's date is ${new Date()
-          .toISOString()
-          .split("T")[0]}.${previousIssuePrompt}`,
-      },
-    ],
-  } as any);
+      ],
+      messages: [
+        {
+          role: "user",
+          content: `${RESEARCH_PROMPT}\n\nGenerate the content for issue_number: ${issueNumber}. Today's date is ${new Date()
+            .toISOString()
+            .split("T")[0]}.${previousIssuePrompt}`,
+        },
+      ],
+    } as any);
+  } catch (error) {
+    console.error(
+      "[anthropic] issue generation request failed",
+      JSON.stringify({
+        issueNumber,
+        model: ISSUE_GENERATION_MODEL,
+        hasApiKey: Boolean(process.env.ANTHROPIC_API_KEY),
+        previousIssueCount: previousContexts?.length ?? 0,
+        error: serializeErrorForLog(error),
+      })
+    );
+    throw error;
+  }
 
   return normalizeIssueData(extractIssuePayloadFromClaudeResponse(response), issueNumber);
 }

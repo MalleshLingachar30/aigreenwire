@@ -379,6 +379,21 @@ export async function GET(request: NextRequest) {
     const message =
       error instanceof Error ? error.message : "Failed to generate weekly issue.";
 
+    console.error(
+      "[cron] issue generation failed",
+      JSON.stringify({
+        message,
+        error:
+          error instanceof Error
+            ? {
+                name: error.name,
+                message: error.message,
+                stack: error.stack,
+              }
+            : error,
+      })
+    );
+
     return NextResponse.json(
       {
         ok: false,
