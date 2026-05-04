@@ -140,7 +140,7 @@ test("allows clearly different issue content", () => {
       {
         section: "india",
         headline: "National multilingual farming advisory launches",
-        sourceUrls: ["https://example.com/old-1"],
+        sourceUrls: ["https://policywire.in/old-1"],
       },
     ],
     stats: [
@@ -162,63 +162,63 @@ test("allows clearly different issue content", () => {
         tag: "WATER",
         headline: "Satellite irrigation audit helps drought districts prioritize repairs",
         paragraphs: ["p1", "p2"],
-        sources: [{ name: "Gov", url: "https://example.com/new-1" }],
+        sources: [{ name: "Gov", url: "https://waterwatch.in/new-1" }],
       },
       {
         section: "india",
         tag: "SOIL",
         headline: "Soil sensor network expands into cooperative sugarcane clusters",
         paragraphs: ["p1", "p2"],
-        sources: [{ name: "Gov", url: "https://example.com/new-2" }],
+        sources: [{ name: "Gov", url: "https://soilmesh.org/new-2" }],
       },
       {
         section: "india",
         tag: "MARKETS",
         headline: "Farmer producer groups test pricing copilots for mandi timing",
         paragraphs: ["p1", "p2"],
-        sources: [{ name: "Gov", url: "https://example.com/new-3" }],
+        sources: [{ name: "Gov", url: "https://mandiintel.ai/new-3" }],
       },
       {
         section: "forestry",
         tag: "FORESTRY",
         headline: "Remote canopy audit reduces wildfire blind spots in dry forests",
         paragraphs: ["p1", "p2"],
-        sources: [{ name: "Gov", url: "https://example.com/new-4" }],
+        sources: [{ name: "Gov", url: "https://forestscan.org/new-4" }],
       },
       {
         section: "forestry",
         tag: "FORESTRY",
         headline: "LiDAR restoration pilot maps erosion corridors in degraded hills",
         paragraphs: ["p1", "p2"],
-        sources: [{ name: "Gov", url: "https://example.com/new-5" }],
+        sources: [{ name: "Gov", url: "https://lidarrestoration.net/new-5" }],
       },
       {
         section: "forestry",
         tag: "FORESTRY",
         headline: "Agroforestry traceability trial links timber plots to verified ledgers",
         paragraphs: ["p1", "p2"],
-        sources: [{ name: "Gov", url: "https://example.com/new-6" }],
+        sources: [{ name: "Gov", url: "https://timberledger.io/new-6" }],
       },
       {
         section: "forestry",
         tag: "FORESTRY",
         headline: "Mangrove monitoring tool spots salinity stress weeks earlier",
         paragraphs: ["p1", "p2"],
-        sources: [{ name: "Gov", url: "https://example.com/new-7" }],
+        sources: [{ name: "Gov", url: "https://mangrovelab.org/new-7" }],
       },
       {
         section: "students",
         tag: "FELLOWSHIP",
         headline: "Applied ecology AI studio opens cohort for field robotics projects",
         paragraphs: ["p1", "p2"],
-        sources: [{ name: "Gov", url: "https://example.com/new-8" }],
+        sources: [{ name: "Gov", url: "https://ecoaistudio.org/new-8" }],
       },
       {
         section: "students",
         tag: "PHD",
         headline: "New remote sensing challenge funds masters teams in watershed mapping",
         paragraphs: ["p1", "p2"],
-        sources: [{ name: "Gov", url: "https://example.com/new-9" }],
+        sources: [{ name: "Gov", url: "https://watershedchallenge.edu/new-9" }],
       },
     ],
     stats: [
@@ -652,5 +652,118 @@ test("flags duplicate stats when only the numeric value matches across format va
   assert.equal(result.duplicateStatMatches.length, 1, "should catch ₹70,000Cr vs ₹70,000 crore");
   assert.equal(result.duplicateStatMatches[0]!.currentValue, "₹70,000 crore");
   assert.equal(result.duplicateStatMatches[0]!.previousValue, "₹70,000Cr");
+  assert.equal(isIssueFreshEnough(result), false);
+});
+
+test("flags repeated source-domain clusters when the same domain dominates another issue", () => {
+  const previousIssue: PreviousIssueContext = {
+    issueNumber: 5,
+    subjectLine: "The AI Green Wire · Issue 05 · India announces ₹10,372cr AI revolution for farms",
+    greetingBlurb:
+      "Namaste. A policy-led week put central AI farming plans back in the spotlight. That matters because growers still need fresher, more practical signals than another top-down announcement. Watch for different institutions and field outcomes next week.",
+    fieldNote: ["Previous note one.", "Previous note two."],
+    stories: [
+      {
+        section: "forestry",
+        headline: "FAO launches AIM4Forests programme for AI-driven forest monitoring",
+        sourceUrls: ["https://www.fao.org/aim4forests/en/"],
+      },
+      {
+        section: "india",
+        headline: "Different India story",
+        sourceUrls: ["https://example.com/india-story"],
+      },
+    ],
+    stats: [
+      { value: "1", label: "a", sourceUrl: "https://example.com/s1" },
+      { value: "2", label: "b", sourceUrl: "https://example.com/s2" },
+      { value: "3", label: "c", sourceUrl: "https://example.com/s3" },
+      { value: "4", label: "d", sourceUrl: "https://example.com/s4" },
+    ],
+  };
+
+  const currentIssue: IssueData = {
+    issue_number: 6,
+    subject_line: "The AI Green Wire · Issue 06 · Fresh forestry week",
+    greeting_blurb:
+      "Namaste. New forest-monitoring tools are shaping this week's view of practical AI in the natural world. That matters because readers need current operational signals rather than reruns of last week's institutional stories. Watch for field deployments that broaden beyond the usual sources.",
+    stories: [
+      {
+        section: "india",
+        tag: "FIELD",
+        headline: "District crop-disease pilot expands",
+        paragraphs: ["p1", "p2"],
+        sources: [{ name: "State", url: "https://district.example.com/new-1" }],
+      },
+      {
+        section: "india",
+        tag: "MARKET",
+        headline: "Mandi prediction tool adds pulses",
+        paragraphs: ["p1", "p2"],
+        sources: [{ name: "Startup", url: "https://mandi.example.com/new-2" }],
+      },
+      {
+        section: "india",
+        tag: "RESEARCH",
+        headline: "Crop imagery benchmark lands",
+        paragraphs: ["p1", "p2"],
+        sources: [{ name: "University", url: "https://benchmark.example.com/new-3" }],
+      },
+      {
+        section: "forestry",
+        tag: "FORESTRY",
+        headline: "FAO publishes landmark AI forest monitoring roadmap",
+        paragraphs: ["p1", "p2"],
+        sources: [{ name: "FAO", url: "https://www.fao.org/forest-monitoring-roadmap" }],
+      },
+      {
+        section: "forestry",
+        tag: "FORESTRY",
+        headline: "FAO-backed carbon monitoring benchmark expands",
+        paragraphs: ["p1", "p2"],
+        sources: [{ name: "FAO", url: "https://www.fao.org/carbon-monitoring-benchmark" }],
+      },
+      {
+        section: "forestry",
+        tag: "FORESTRY",
+        headline: "Independent mangrove mapping update",
+        paragraphs: ["p1", "p2"],
+        sources: [{ name: "Nature", url: "https://mangrove.example.com/new-4" }],
+      },
+      {
+        section: "forestry",
+        tag: "FORESTRY",
+        headline: "Restoration audit startup lands pilot",
+        paragraphs: ["p1", "p2"],
+        sources: [{ name: "Startup", url: "https://restoration.example.com/new-5" }],
+      },
+      {
+        section: "students",
+        tag: "PHD",
+        headline: "New PhD call opens",
+        paragraphs: ["p1", "p2"],
+        sources: [{ name: "University", url: "https://phd.example.com/new-6" }],
+      },
+      {
+        section: "students",
+        tag: "FELLOWSHIP",
+        headline: "Field robotics fellowship opens",
+        paragraphs: ["p1", "p2"],
+        sources: [{ name: "Institute", url: "https://fellowship.example.com/new-7" }],
+      },
+    ],
+    stats: [
+      { value: "10", label: "x", source_name: "x", source_url: "https://example.com/ns1" },
+      { value: "20", label: "y", source_name: "x", source_url: "https://example.com/ns2" },
+      { value: "30", label: "z", source_name: "x", source_url: "https://example.com/ns3" },
+      { value: "40", label: "w", source_name: "x", source_url: "https://example.com/ns4" },
+    ],
+    field_note: ["Fresh field note one.", "Fresh field note two."],
+  };
+
+  const result = checkIssueFreshness(currentIssue, previousIssue);
+
+  assert.equal(result.repeatedSourceDomainMatches.length, 1);
+  assert.equal(result.repeatedSourceDomainMatches[0]!.domain, "fao.org");
   assert.equal(isIssueFreshEnough(result), false);
 });

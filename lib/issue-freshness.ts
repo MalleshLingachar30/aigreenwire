@@ -42,6 +42,12 @@ export type FreshnessCheckResult = {
     previousHeadline: string;
     sourceUrl: string;
   }>;
+  repeatedSourceDomainMatches: Array<{
+    domain: string;
+    currentHeadlines: string[];
+    previousIssueNumber: number;
+    previousSubjectLine: string;
+  }>;
   similarHeadlineMatches: Array<{
     currentHeadline: string;
     previousHeadline: string;
@@ -300,6 +306,16 @@ function normalizeSearchableText(value: string): string {
     .trim()} `;
 }
 
+function extractSourceDomain(value: string): string | null {
+  try {
+    const url = new URL(value.trim());
+    const hostname = url.hostname.toLowerCase().replace(/^www\./, "");
+    return hostname || null;
+  } catch {
+    return null;
+  }
+}
+
 function tokenizeHeadline(value: string): string[] {
   return normalizeWhitespace(value)
     .replace(/[^a-z0-9\s-]/g, " ")
@@ -529,6 +545,17 @@ export function buildPreviousIssuePromptBlock(
     const topicLanes = detectTopicLanesFromText(buildPreviousIssueSearchText(context))
       .map((lane) => lane.label)
       .join("; ");
+    const sourceDomains = Array.from(
+      new Set(
+        context.stories.flatMap((story) =>
+          story.sourceUrls
+            .map((url) => extractSourceDomain(url))
+            .filter((domain): domain is string => Boolean(domain))
+        )
+      )
+    )
+      .slice(0, 5)
+      .join(", ");
     const storyLines = context.stories
       .slice(0, 3)
       .map(
@@ -550,6 +577,7 @@ export function buildPreviousIssuePromptBlock(
         `Opening: ${previousOpeningSentence}`,
         `Lens: ${previousOpeningLens}; Entity: ${previousOpeningEntity ?? "none"}`,
         `Blocked lanes: ${topicLanes || "none"}`,
+        `Source domains to avoid reusing: ${sourceDomains || "none"}`,
         `Field note theme: ${context.fieldNote.join(" ")}`,
         "Top headlines to avoid repeating:",
         storyLines,
@@ -567,11 +595,13 @@ export function buildPreviousIssuePromptBlock(
     "--- Freshness rules ---",
     "Do not reuse the same anchor topics, same angle, or same framing from any of the above issues unless there is a materially new development that clearly advances the story.",
     "Semantic topic-lane rule: avoid re-running the same lane from recent issues even if you rewrite the wording. In particular, do not produce another national AI farm policy push, Bharat-VISTAAR advisory rollout, India AI Mission for agriculture, or Maharashtra AI agriculture push unless there is an unmistakable last-7-days development that materially changes the story.",
+    "Source diversity rule: if the same institution, publication, ministry, or source domain already featured in recent issues, prefer a different source this week. Do not build the new issue around repeated FAO/PIB/central-government-style source clusters when fresher institutions are available.",
     "Every story in the new issue must either come from the past 7 days or be an explicit follow-on where the headline and paragraphs clearly state what changed since last week.",
     "Rewrite the editorial framing each week: vary the subject line angle, the greeting emphasis, and the field note advice so readers do not feel they are reading the same issue twice.",
     "Opening freshness rule: do not lead with the same person, institution, programme, ministry, or state in consecutive issues unless there is a materially larger follow-on event. Rotate the opening lens across policy, field impact, research breakthrough, market movement, and student opportunity. Do not reuse formulaic structures such as 'This week marks...' or 'This week marked...'.",
     "Stats freshness rule: every stat in the new issue must be different from ALL recent issues listed above. Do not reuse any stat value, label, or source URL. Find completely new data points from the past 7 days.",
     "Field note freshness rule: the sandalwood/agroforestry advice must be substantially different from ALL recent issues. Cover a different aspect, season, or practice. Do not rephrase the same advice.",
+    "Pivot rule: if India central-policy or national advisory stories dominated recent issues, replace them with fresher categories such as district-level field deployments, startup product launches, crop-specific pilot results, research benchmarks, biodiversity tools, market shifts, or student opportunities.",
   ].join("\n");
 }
 
@@ -607,6 +637,7 @@ export function checkIssueFreshness(
 ): FreshnessCheckResult {
   const emptyResult: FreshnessCheckResult = {
     duplicateSourceUrlMatches: [],
+    repeatedSourceDomainMatches: [],
     similarHeadlineMatches: [],
     similarSubjectLine: null,
     repeatedOpeningEntity: null,
@@ -634,6 +665,7 @@ export function checkIssueFreshness(
   const mostRecent = previousIssues[0]!;
 
   const duplicateSourceUrlMatches: FreshnessCheckResult["duplicateSourceUrlMatches"] = [];
+  const repeatedSourceDomainMatches: FreshnessCheckResult["repeatedSourceDomainMatches"] = [];
   const similarHeadlineMatches: FreshnessCheckResult["similarHeadlineMatches"] = [];
   const repeatedTopicLaneMatches: FreshnessCheckResult["repeatedTopicLaneMatches"] = [];
   const duplicateStatMatches: FreshnessCheckResult["duplicateStatMatches"] = [];
@@ -656,8 +688,30 @@ export function checkIssueFreshness(
   );
 
   // Content-level checks against ALL previous issues
+  const currentDomainToStories = new Map<string, string[]>();
+  for (const story of currentIssue.stories) {
+    const storyDomains = new Set(
+      story.sources
+        .map((source) => extractSourceDomain(source.url))
+        .filter((domain): domain is string => Boolean(domain))
+    );
+
+    for (const domain of storyDomains) {
+      const existing = currentDomainToStories.get(domain) ?? [];
+      existing.push(story.headline);
+      currentDomainToStories.set(domain, existing);
+    }
+  }
+
   for (const previousIssue of previousIssues) {
     const previousTopicLanes = detectTopicLanesFromText(buildPreviousIssueSearchText(previousIssue));
+    const previousDomains = new Set(
+      previousIssue.stories.flatMap((story) =>
+        story.sourceUrls
+          .map((url) => extractSourceDomain(url))
+          .filter((domain): domain is string => Boolean(domain))
+      )
+    );
     for (const lane of previousTopicLanes) {
       if (!currentTopicLaneIds.has(lane.id)) {
         continue;
@@ -670,6 +724,24 @@ export function checkIssueFreshness(
         repeatedTopicLaneMatches.push({
           laneId: lane.id,
           laneLabel: lane.label,
+          previousIssueNumber: previousIssue.issueNumber,
+          previousSubjectLine: previousIssue.subjectLine,
+        });
+      }
+    }
+
+    for (const [domain, currentHeadlines] of currentDomainToStories.entries()) {
+      if (currentHeadlines.length < 2 || !previousDomains.has(domain)) {
+        continue;
+      }
+
+      const alreadyLogged = repeatedSourceDomainMatches.some(
+        (match) => match.domain === domain && match.previousIssueNumber === previousIssue.issueNumber
+      );
+      if (!alreadyLogged) {
+        repeatedSourceDomainMatches.push({
+          domain,
+          currentHeadlines,
           previousIssueNumber: previousIssue.issueNumber,
           previousSubjectLine: previousIssue.subjectLine,
         });
@@ -786,6 +858,7 @@ export function checkIssueFreshness(
 
   return {
     duplicateSourceUrlMatches,
+    repeatedSourceDomainMatches,
     similarHeadlineMatches,
     similarSubjectLine:
       subjectSimilarity >= 0.4
@@ -846,6 +919,7 @@ export function checkIssueFreshness(
 
 export function isIssueFreshEnough(result: FreshnessCheckResult): boolean {
   const duplicateSources = result.duplicateSourceUrlMatches.length;
+  const repeatedSourceDomains = result.repeatedSourceDomainMatches.length;
   const similarHeadlines = result.similarHeadlineMatches.length;
   const similarSubjectLine = result.similarSubjectLine !== null;
   const repeatedOpeningEntity = result.repeatedOpeningEntity !== null;
@@ -858,6 +932,7 @@ export function isIssueFreshEnough(result: FreshnessCheckResult): boolean {
 
   return (
     duplicateSources === 0 &&
+    repeatedSourceDomains === 0 &&
     similarHeadlines <= 1 &&
     !similarSubjectLine &&
     !repeatedOpeningEntity &&
@@ -877,6 +952,17 @@ export function formatFreshnessFailure(result: FreshnessCheckResult): string {
     lines.push(
       `duplicate source URLs: ${result.duplicateSourceUrlMatches
         .map((match) => `${match.currentHeadline} <-> ${match.previousHeadline}`)
+        .join("; ")}`
+    );
+  }
+
+  if (result.repeatedSourceDomainMatches.length > 0) {
+    lines.push(
+      `repeated source domains: ${result.repeatedSourceDomainMatches
+        .map(
+          (match) =>
+            `${match.domain} reused across ${match.currentHeadlines.join(" / ")} (issue ${match.previousIssueNumber}: ${match.previousSubjectLine})`
+        )
         .join("; ")}`
     );
   }
