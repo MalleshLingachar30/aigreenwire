@@ -64,7 +64,7 @@ function getAdminPassword(): string {
     throw new Error("ADMIN_PASSWORD is missing.");
   }
 
-  return value;
+  return value.trim();
 }
 
 function getEditorEmail(): string {

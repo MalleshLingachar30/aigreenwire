@@ -1,7 +1,10 @@
 import type { IssueData, Story } from "./claude";
 import { sanitizeIssueData } from "@/lib/citation-sanitize";
 
-const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://aigreenwire.com").replace(/\/+$/, "");
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://aigreenwire.com").replace(
+  /\/+$/,
+  ""
+);
 const LOGO_URL = `${SITE_URL}/assets/grobet-logo.png`;
 const PHOTO_URL = `${SITE_URL}/assets/mallesh.jpg`;
 

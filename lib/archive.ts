@@ -341,3 +341,8 @@ export async function getArchiveIssueBySlug(
 
   return mapArchiveIssue(issue);
 }
+
+export async function getLatestArchiveIssue(): Promise<ArchiveIssue | null> {
+  const issues = await listArchiveIssues(1);
+  return issues[0] ?? null;
+}

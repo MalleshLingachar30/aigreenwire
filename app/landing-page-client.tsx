@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { isLandingAutoConfirmWindow } from '@/lib/subscription';
 
 const LANDING_LOGO_URL = '/assets/grobet-logo.png';
+const SAMPLE_BRIEFING_PATH = '/w/6';
+const LATEST_ISSUE_PATH = '/sample-issue';
 
 type LandingPageClientProps = {
   initialArchivePrompt: boolean;
@@ -126,7 +128,7 @@ export default function LandingPageClient({
             marginBottom: 10,
           }}
         >
-          A weekly briefing
+          Monday morning briefing
         </div>
         <h1
           style={{
@@ -151,8 +153,8 @@ export default function LandingPageClient({
             marginBottom: 0,
           }}
         >
-          What changed this week in AI for agriculture, agroforestry, forestry, biodiversity and the natural world
-          {' — '}curated for growers, foresters and students.
+          The clearest weekly signal on how AI is changing Indian farming, forestry, agroforestry and ecology
+          {' — '}curated for growers, researchers, students and land-sector builders.
         </p>
       </div>
 
@@ -166,13 +168,51 @@ export default function LandingPageClient({
         }}
       >
         <p style={{ fontSize: 15, margin: '0 0 20px', lineHeight: 1.65, color: '#2C2C2A' }}>
-          Every Monday morning, a two-page briefing lands in your inbox covering the week&apos;s most important
-          developments in AI applied to farming, forestry and ecology {'— '}with special attention to India and Indian
-          growers. Written and edited by Mallesh Lingachar, Director of Grobet India Agrotech and a certified
-          sandalwood trainer.
+          Every Monday morning, a short briefing lands in your inbox with the week&apos;s most important AI moves across
+          agriculture, forestry, biodiversity and ecology {'— '}with special attention to India and Indian growers.
+          Written and edited by Mallesh Lingachar, Director of Grobet India Agrotech.
         </p>
-        <p style={{ fontSize: 14, margin: '0 0 20px', lineHeight: 1.65, color: '#5F5E5A' }}>
-          Free forever. No advertising.{' '}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+            gap: 10,
+            marginBottom: 20,
+          }}
+        >
+          <div
+            style={{
+              padding: '12px 14px',
+              borderRadius: 8,
+              background: '#fff',
+              border: '0.5px solid #C0DD97',
+              fontSize: 13,
+              lineHeight: 1.5,
+              color: '#2C2C2A',
+            }}
+          >
+            <strong style={{ color: '#173404', fontWeight: 600 }}>Every issue includes:</strong>
+            <br />
+            3 big signals, 1 India move, 1 field or research use case, and 1 opportunity.
+          </div>
+          <div
+            style={{
+              padding: '12px 14px',
+              borderRadius: 8,
+              background: '#fff',
+              border: '0.5px solid #C0DD97',
+              fontSize: 13,
+              lineHeight: 1.5,
+              color: '#2C2C2A',
+            }}
+          >
+            <strong style={{ color: '#173404', fontWeight: 600 }}>Built for:</strong>
+            <br />
+            Farmers, foresters, agri students, startup teams, and policy professionals.
+          </div>
+        </div>
+        <p style={{ fontSize: 14, margin: '0 0 16px', lineHeight: 1.65, color: '#5F5E5A' }}>
+          Free forever. No advertising. Instant archive access after signup.{' '}
           <Link href="/unsubscribe" style={{ color: '#3B6D11', textDecoration: 'underline' }}>
             Unsubscribe in one click.
           </Link>
@@ -230,9 +270,65 @@ export default function LandingPageClient({
               fontFamily: 'inherit',
             }}
           >
-            {status === 'loading' ? 'Subscribing…' : 'Subscribe'}
+            {status === 'loading' ? 'Subscribing…' : 'Get Monday Briefing'}
           </button>
         </form>
+
+        <div
+          style={{
+            marginTop: 10,
+            fontSize: 12,
+            color: '#6B7280',
+            lineHeight: 1.5,
+            textAlign: 'center',
+          }}
+        >
+          One email every Monday. No ads. Leave anytime.
+        </div>
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+            gap: 10,
+            marginTop: 18,
+          }}
+        >
+          <Link
+            href={LATEST_ISSUE_PATH}
+            style={{
+              display: 'block',
+              padding: '14px 16px',
+              borderRadius: 8,
+              border: '0.5px solid #C0DD97',
+              background: '#fff',
+              color: '#173404',
+              textDecoration: 'none',
+            }}
+          >
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Read the latest issue</div>
+            <div style={{ fontSize: 12, color: '#6B7280', lineHeight: 1.5 }}>
+              Open a public sample of the newest Monday briefing before subscribing.
+            </div>
+          </Link>
+          <Link
+            href={SAMPLE_BRIEFING_PATH}
+            style={{
+              display: 'block',
+              padding: '14px 16px',
+              borderRadius: 8,
+              border: '0.5px solid #C0DD97',
+              background: '#fff',
+              color: '#173404',
+              textDecoration: 'none',
+            }}
+          >
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>See a sample Monday briefing</div>
+            <div style={{ fontSize: 12, color: '#6B7280', lineHeight: 1.5 }}>
+              Preview the public WhatsApp issue hub before subscribing.
+            </div>
+          </Link>
+        </div>
 
         {status === 'success' && (
           <div
@@ -266,15 +362,14 @@ export default function LandingPageClient({
 
       <div style={{ fontSize: 14, color: '#5F5E5A', lineHeight: 1.7, marginBottom: 24 }}>
         <p>
-          <strong style={{ fontWeight: 500, color: '#173404' }}>What you&apos;ll read about:</strong> India&apos;s AI policy shifts
-          (Bharat-VISTAAR, AI Centres of Excellence), state-level pilots from Telangana to Maharashtra, global
-          developments in AI forest monitoring and carbon accounting, biodiversity AI research from FAO to Google, and
-          live opportunities for Indian agriculture students and researchers.
+          <strong style={{ fontWeight: 500, color: '#173404' }}>What you&apos;ll read about:</strong> India&apos;s AI policy shifts,
+          crop and field pilots, forestry and biodiversity tools, research benchmarks, startup launches, and live
+          opportunities for Indian agriculture students and researchers.
         </p>
         <p>
           <strong style={{ fontWeight: 500, color: '#173404' }}>Who it&apos;s for:</strong> Farmers and agroforestry growers,
-          forest department officers, agriculture university faculty and students, policy makers, and anyone who
-          believes AI will reshape how we work the land.
+          forest department officers, agriculture faculty and students, startup operators, policy makers, and anyone
+          who wants signal over hype in AI for the land sector.
         </p>
       </div>
 

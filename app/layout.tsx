@@ -2,34 +2,15 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://aigreenwire.com";
+const SITE_TITLE = "The AI Green Wire";
 const SITE_DESCRIPTION =
-  "Weekly AI signals across agriculture, agroforestry, forestry, and ecology from The AI Green Wire.";
+  "A Monday briefing on how AI is changing Indian farming, forestry, agroforestry, and ecology.";
+const SHARE_IMAGE_URL = `${SITE_URL}/api/share/home-image?v=1`;
 
 export const metadata: Metadata = {
-  title: "The AI Green Wire",
+  title: SITE_TITLE,
   description: SITE_DESCRIPTION,
   metadataBase: new URL(SITE_URL),
-  openGraph: {
-    title: "The AI Green Wire",
-    description: SITE_DESCRIPTION,
-    siteName: "The AI Green Wire",
-    type: "website",
-    url: SITE_URL,
-    images: [
-      {
-        url: "/opengraph-image",
-        width: 1200,
-        height: 630,
-        alt: "The AI Green Wire weekly briefing thumbnail",
-      },
-    ],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "The AI Green Wire",
-    description: SITE_DESCRIPTION,
-    images: ["/twitter-image"],
-  },
 };
 
 export default function RootLayout({
@@ -39,6 +20,25 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <link rel="canonical" href={SITE_URL} />
+
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content={SITE_TITLE} />
+        <meta property="og:title" content={SITE_TITLE} />
+        <meta property="og:description" content={SITE_DESCRIPTION} />
+        <meta property="og:url" content={SITE_URL} />
+        <meta property="og:image" content={SHARE_IMAGE_URL} />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:image:alt" content="The AI Green Wire homepage share preview" />
+
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={SITE_TITLE} />
+        <meta name="twitter:description" content={SITE_DESCRIPTION} />
+        <meta name="twitter:image" content={SHARE_IMAGE_URL} />
+        <meta name="twitter:image:alt" content="The AI Green Wire homepage share preview" />
+      </head>
       <body className="bg-white text-slate-900 antialiased">{children}</body>
     </html>
   );

@@ -10,6 +10,7 @@ import { sendEmail } from "@/lib/resend";
 import { buildAppUrl, isValidEmail, normalizeEmail } from "@/lib/subscription";
 import { renderIssue } from "@/lib/template";
 import { sanitizeIssueData } from "@/lib/citation-sanitize";
+import { generateTranslatedCards, upsertWhatsAppCards } from "@/lib/whatsapp-cards";
 import {
   checkIssueFreshness,
   formatFreshnessFailure,
@@ -49,6 +50,12 @@ type InsertedDraft = {
   htmlRendered: string;
 };
 
+type GeneratedCardsResult = {
+  generated: boolean;
+  count: number;
+  error: string | null;
+};
+
 const MAX_INSERT_ATTEMPTS = 3;
 const MAX_GENERATION_ATTEMPTS = 2;
 const DEFAULT_MODEL = ISSUE_GENERATION_MODEL;
@@ -79,7 +86,7 @@ function getAdminPassword(): string {
     throw new Error("ADMIN_PASSWORD is missing.");
   }
 
-  return value;
+  return value.trim();
 }
 
 function slugify(input: string): string {
@@ -296,16 +303,64 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function buildPreviewEnvelopeHtml(draft: InsertedDraft, htmlRendered: string): string {
+function buildCardsHubUrl(issueNumber: number, siteUrl: string): string {
+  return `${siteUrl}/w/${issueNumber}`;
+}
+
+async function generateDraftCards(draft: InsertedDraft, issueData: IssueData): Promise<GeneratedCardsResult> {
+  try {
+    const translatedCards = await generateTranslatedCards(issueData);
+    await upsertWhatsAppCards(draft.id, draft.issueNumber, translatedCards);
+
+    return {
+      generated: true,
+      count: translatedCards.length,
+      error: null,
+    };
+  } catch (error) {
+    return {
+      generated: false,
+      count: 0,
+      error: error instanceof Error ? error.message : "WhatsApp cards could not be generated.",
+    };
+  }
+}
+
+function buildPreviewEnvelopeHtml(
+  draft: InsertedDraft,
+  htmlRendered: string,
+  cardsResult: GeneratedCardsResult
+): string {
   const siteUrl = getSiteUrl();
   const encodedPassword = encodeURIComponent(getAdminPassword());
   const previewUrl = `${siteUrl}/api/admin/preview?id=${draft.id}&password=${encodedPassword}`;
   const approveUrl = `${siteUrl}/api/admin/approve?id=${draft.id}&password=${encodedPassword}`;
+  const cardsHubUrl = buildCardsHubUrl(draft.issueNumber, siteUrl);
+  const cardsBlock = cardsResult.generated
+    ? `<div style="margin:0 0 18px;padding:16px;border:1px solid #cfe7da;border-radius:14px;background:#f4fbf6;">
+      <p style="margin:0 0 10px;font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#0f766e;">WhatsApp Share Link</p>
+      <p style="margin:0 0 12px;font-size:14px;color:#0f172a;">Your multilingual WhatsApp hub for issue ${String(
+        draft.issueNumber
+      ).padStart(2, "0")} is ready. This is the single link to share across Kannada, Telugu, Tamil, and Hindi.</p>
+      <p style="margin:0 0 12px;">
+        <a href="${escapeHtml(
+          cardsHubUrl
+        )}" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:12px 18px;border-radius:999px;">Open WhatsApp Issue Hub</a>
+      </p>
+      <p style="margin:0;font-size:13px;color:#475569;">${escapeHtml(cardsHubUrl)}</p>
+    </div>`
+    : `<div style="margin:0 0 18px;padding:14px 16px;border:1px solid #fecaca;border-radius:14px;background:#fff7f7;color:#7f1d1d;">
+      <p style="margin:0 0 8px;font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">WhatsApp Hub Not Ready Yet</p>
+      <p style="margin:0;font-size:13px;line-height:1.5;">Cards could not be generated during the 6 AM draft run: ${escapeHtml(
+        cardsResult.error ?? "unknown error"
+      )}</p>
+    </div>`;
 
   return [
     '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#0f172a;line-height:1.5;">',
     `<p><strong>Preview ready:</strong> Issue ${String(draft.issueNumber).padStart(2, "0")} (${escapeHtml(draft.slug)})</p>`,
     "<p>Review the draft and approve when ready:</p>",
+    cardsBlock,
     `<p style="margin:14px 0 16px;">
       <a href="${escapeHtml(previewUrl)}" style="display:inline-block;padding:10px 16px;background:#1d4ed8;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;margin-right:8px;">Preview Draft</a>
       <a href="${escapeHtml(approveUrl)}" style="display:inline-block;padding:10px 16px;background:#166534;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;">Approve &amp; Send</a>
@@ -336,7 +391,8 @@ export async function GET(request: NextRequest) {
     const nextIssueNumber = await getNextIssueNumber();
     const generated = await generateFreshIssue(nextIssueNumber);
     const draft = await createDraftIssue(generated, DEFAULT_MODEL);
-    const previewHtml = buildPreviewEnvelopeHtml(draft, draft.htmlRendered);
+    const cardsResult = await generateDraftCards(draft, generated);
+    const previewHtml = buildPreviewEnvelopeHtml(draft, draft.htmlRendered, cardsResult);
 
     const previewEmailId = await sendEmail({
       to: editorEmail,
@@ -366,6 +422,12 @@ export async function GET(request: NextRequest) {
           slug: draft.slug,
           title: draft.title,
           status: draft.status,
+        },
+        whatsapp: {
+          hubUrl: buildCardsHubUrl(draft.issueNumber, getSiteUrl()),
+          generated: cardsResult.generated,
+          cardsCount: cardsResult.count,
+          error: cardsResult.error,
         },
         preview: {
           to: editorEmail,

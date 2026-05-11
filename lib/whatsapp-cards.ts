@@ -56,7 +56,7 @@ export const LANGUAGE_CONFIG: Record<
 };
 
 const LANGUAGE_LIST: Language[] = ["kn", "te", "ta", "hi"];
-const TRANSLATION_MODEL = "claude-sonnet-4-20250514";
+const TRANSLATION_MODEL = "claude-sonnet-4-6-20250410";
 const CARD_HEADLINE_FALLBACK = "AI Green Wire Update";
 const CARD_SUMMARY_FALLBACK = "Latest agriculture and forestry AI update for Indian growers.";
 const CARD_ACTION_FALLBACK =
