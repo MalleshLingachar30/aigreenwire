@@ -18,6 +18,7 @@ import {
   type PreviousIssueContext,
 } from "@/lib/issue-freshness";
 
+export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 type MaxIssueNumberRow = {

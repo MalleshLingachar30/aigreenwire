@@ -156,10 +156,8 @@ function parseIssueData(
     return null;
   }
 
-  const indiaCount = stories.filter((story) => story.section === "india").length;
-  const forestryCount = stories.filter((story) => story.section === "forestry").length;
-  const studentsCount = stories.filter((story) => story.section === "students").length;
-  if (indiaCount !== 3 || forestryCount !== 4 || studentsCount !== 2) {
+  const sectionsPresent = new Set(stories.map((story) => story.section));
+  if (!sectionsPresent.has("india") || !sectionsPresent.has("forestry") || !sectionsPresent.has("students")) {
     return null;
   }
 

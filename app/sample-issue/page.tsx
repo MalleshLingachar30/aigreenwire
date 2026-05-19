@@ -23,7 +23,7 @@ export default async function SampleIssuePage() {
             Back to home
           </Link>
           <span className="text-slate-500">|</span>
-          <Link href="/w/6" className="text-[#3B6D11] hover:text-[#173404]">
+          <Link href={`/w/${issue.issueNumber}`} className="text-[#3B6D11] hover:text-[#173404]">
             WhatsApp sample
           </Link>
           <span className="text-slate-500">|</span>

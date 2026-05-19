@@ -11,6 +11,7 @@ import {
 } from "@/lib/whatsapp-cards";
 import { buildAppUrl, isUuidToken } from "@/lib/subscription";
 
+export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
 type IssueRow = {

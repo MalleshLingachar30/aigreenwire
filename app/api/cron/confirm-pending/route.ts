@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isCronRequestAuthorized } from "@/lib/api-auth";
 import { sql } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 type PendingCountRow = {

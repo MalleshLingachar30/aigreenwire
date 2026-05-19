@@ -3,6 +3,8 @@ import { sql } from "@/lib/db";
 import { renderCardHTML } from "@/lib/card-renderer";
 import { isLanguage, type Language } from "@/lib/whatsapp-cards";
 
+export const dynamic = "force-dynamic";
+
 type CardRow = {
   issue_number: number;
   language: Language;

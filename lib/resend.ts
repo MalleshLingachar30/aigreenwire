@@ -1,6 +1,33 @@
 import { Resend } from "resend";
 
-export const resend = new Resend(process.env.RESEND_API_KEY);
+let cachedResend: Resend | null = null;
+
+function getResendApiKey(): string {
+  const value = process.env.RESEND_API_KEY?.trim();
+  if (!value) {
+    throw new Error('Missing API key. Pass it to the constructor `new Resend("re_123")`');
+  }
+
+  return value;
+}
+
+function getResendClient(): Resend {
+  if (cachedResend) {
+    return cachedResend;
+  }
+
+  cachedResend = new Resend(getResendApiKey());
+  return cachedResend;
+}
+
+export const resend = {
+  emails: {
+    send: (...args: Parameters<Resend["emails"]["send"]>) => getResendClient().emails.send(...args),
+  },
+  batch: {
+    send: (...args: Parameters<Resend["batch"]["send"]>) => getResendClient().batch.send(...args),
+  },
+};
 
 export const FROM_ADDRESS =
   process.env.RESEND_FROM_EMAIL ?? "The AI Green Wire <editor@aigreenwire.com>";
@@ -60,7 +87,6 @@ export async function batchSendEmails(
     throw new Error(`Resend batch error: ${error.message}`);
   }
 
-  // Resend v6 batch response: data.data is the array of {id} objects
   const items: { id: string }[] = (data as { data?: { id: string }[] } | null)?.data ?? [];
   return items.map((item, i) => ({
     id: item.id,

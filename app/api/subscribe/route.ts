@@ -10,6 +10,8 @@ import {
   sanitizeName,
 } from "@/lib/subscription";
 
+export const dynamic = "force-dynamic";
+
 type SubscribePayload = {
   email?: unknown;
   name?: unknown;

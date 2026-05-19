@@ -5,6 +5,8 @@ import {
 } from "@/lib/cards-language-reader";
 import { isLanguage } from "@/lib/whatsapp-cards";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request: NextRequest) {
   const issueNumber = parseIssueNumber(request.nextUrl.searchParams.get("issue"));
   const languageRaw = request.nextUrl.searchParams.get("lang");

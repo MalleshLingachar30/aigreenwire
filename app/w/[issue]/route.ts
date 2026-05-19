@@ -1,6 +1,8 @@
 import { parseIssueNumber } from "@/lib/cards-language-reader";
 import { renderIssueHubResponse } from "@/lib/cards-issue-hub";
 
+export const dynamic = "force-dynamic";
+
 type RouteParams = {
   issue: string;
 };

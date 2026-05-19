@@ -4,6 +4,8 @@ import { sql } from "@/lib/db";
 import { sendEmail } from "@/lib/resend";
 import { buildAppUrl, buildWelcomeEmailHtml, isUuidToken } from "@/lib/subscription";
 
+export const dynamic = "force-dynamic";
+
 type SubscriberRow = {
   id: string;
   email: string;

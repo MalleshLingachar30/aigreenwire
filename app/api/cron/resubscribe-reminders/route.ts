@@ -9,6 +9,8 @@ import {
   normalizeEmail,
 } from "@/lib/subscription";
 
+export const dynamic = "force-dynamic";
+
 type UnsubscribedSubscriberRow = {
   id: string;
   email: string;

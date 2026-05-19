@@ -5,6 +5,8 @@ import {
 } from "@/lib/cards-language-reader";
 import { isLanguage } from "@/lib/whatsapp-cards";
 
+export const dynamic = "force-dynamic";
+
 type RouteParams = {
   issue: string;
   lang: string;

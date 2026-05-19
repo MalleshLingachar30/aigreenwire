@@ -3,6 +3,8 @@ import { isAdminRequestAuthorized } from "@/lib/api-auth";
 import { sql } from "@/lib/db";
 import { isUuidToken } from "@/lib/subscription";
 
+export const dynamic = "force-dynamic";
+
 type IssuePreviewRow = {
   id: string;
   issue_number: number;

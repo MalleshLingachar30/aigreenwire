@@ -13,6 +13,7 @@ import {
   upsertWhatsAppCards,
 } from "@/lib/whatsapp-cards";
 
+export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 const RESEND_BATCH_SIZE = 100;

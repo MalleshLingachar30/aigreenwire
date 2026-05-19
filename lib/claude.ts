@@ -4,11 +4,37 @@ import { buildPreviousIssuePromptBlock, type PreviousIssueContext } from "@/lib/
 
 const ANTHROPIC_REQUEST_TIMEOUT_MS = 95_000;
 
-export const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-  maxRetries: 0,
-  timeout: ANTHROPIC_REQUEST_TIMEOUT_MS,
-});
+let cachedAnthropic: Anthropic | null = null;
+
+function getAnthropicApiKey(): string {
+  const value = process.env.ANTHROPIC_API_KEY?.trim();
+  if (!value) {
+    throw new Error("Missing Anthropic API key.");
+  }
+
+  return value;
+}
+
+function getAnthropicClient(): Anthropic {
+  if (cachedAnthropic) {
+    return cachedAnthropic;
+  }
+
+  cachedAnthropic = new Anthropic({
+    apiKey: getAnthropicApiKey(),
+    maxRetries: 0,
+    timeout: ANTHROPIC_REQUEST_TIMEOUT_MS,
+  });
+
+  return cachedAnthropic;
+}
+
+export const anthropic = {
+  messages: {
+    create: ((...args: Parameters<Anthropic["messages"]["create"]>) =>
+      getAnthropicClient().messages.create(...args)) as Anthropic["messages"]["create"],
+  },
+};
 
 export const ISSUE_GENERATION_MODEL = "claude-sonnet-4-6";
 

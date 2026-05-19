@@ -4,6 +4,7 @@ import { loadIssueHubCards } from "@/lib/cards-issue-hub";
 import { parseIssueNumber } from "@/lib/cards-language-reader";
 import { LANGUAGE_CONFIG, type Language } from "@/lib/whatsapp-cards";
 
+export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 type RouteParams = {

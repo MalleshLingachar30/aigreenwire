@@ -3,6 +3,8 @@ import { clearArchiveAccessCookie } from "@/lib/archive-access";
 import { sql } from "@/lib/db";
 import { buildAppUrl, isUuidToken } from "@/lib/subscription";
 
+export const dynamic = "force-dynamic";
+
 type SubscriberRow = {
   id: string;
   unsubscribed_at: string | null;

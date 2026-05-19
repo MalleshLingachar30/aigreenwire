@@ -13,6 +13,7 @@ import {
   type Language,
 } from "@/lib/whatsapp-cards";
 
+export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 type RouteParams = {

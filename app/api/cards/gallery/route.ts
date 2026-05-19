@@ -3,6 +3,8 @@ import { isAdminRequestAuthorized } from "@/lib/api-auth";
 import { sql } from "@/lib/db";
 import { LANGUAGE_CONFIG, type Language } from "@/lib/whatsapp-cards";
 
+export const dynamic = "force-dynamic";
+
 type CardRow = {
   issue_number: number;
   language: Language;
