@@ -65,6 +65,8 @@ type GenerateIssueOptions = {
   /** @deprecated Use previousIssues instead */
   previousIssue?: PreviousIssueContext | null;
   previousIssues?: PreviousIssueContext[] | null;
+  /** Freshness failure message from a previous attempt — appended to the prompt so Claude knows exactly what to avoid on retry. */
+  retryHint?: string | null;
 };
 
 function serializeErrorForLog(error: unknown): Record<string, unknown> {
@@ -383,6 +385,9 @@ export async function generateIssue(
   const previousIssuePrompt = previousContexts && previousContexts.length > 0
     ? `\n\n${buildPreviousIssuePromptBlock(previousContexts)}`
     : "";
+  const retryBlock = options?.retryHint
+    ? `\n\nIMPORTANT RETRY NOTICE: A previous generation attempt was rejected for freshness violations. You MUST avoid ALL of these issues this time:\n${options.retryHint}\nSearch for completely different topics, sources, and stats. Do NOT reuse any of the flagged items above.`
+    : "";
 
   let response;
   try {
@@ -475,7 +480,7 @@ export async function generateIssue(
           role: "user",
           content: `${RESEARCH_PROMPT}\n\nGenerate the content for issue_number: ${issueNumber}. Today's date is ${new Date()
             .toISOString()
-            .split("T")[0]}.${previousIssuePrompt}`,
+            .split("T")[0]}.${previousIssuePrompt}${retryBlock}`,
         },
       ],
     } as any);

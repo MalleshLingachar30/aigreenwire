@@ -58,7 +58,7 @@ type GeneratedCardsResult = {
 };
 
 const MAX_INSERT_ATTEMPTS = 3;
-const MAX_GENERATION_ATTEMPTS = 2;
+const MAX_GENERATION_ATTEMPTS = 3;
 const DEFAULT_MODEL = ISSUE_GENERATION_MODEL;
 
 function getEditorEmail(): string {
@@ -202,7 +202,11 @@ async function generateFreshIssue(issueNumber: number): Promise<IssueData> {
   let lastFailure = "";
 
   for (let attempt = 0; attempt < MAX_GENERATION_ATTEMPTS; attempt += 1) {
-    const generated = await generateIssue(issueNumber, { previousIssues: previousIssueForPrompt });
+    const retryHint = attempt > 0 && lastFailure ? lastFailure : null;
+    const generated = await generateIssue(issueNumber, {
+      previousIssues: previousIssueForPrompt,
+      retryHint,
+    });
     const freshness = checkIssueFreshness(generated, previousIssueForPrompt);
 
     if (isIssueFreshEnough(freshness)) {
@@ -210,6 +214,7 @@ async function generateFreshIssue(issueNumber: number): Promise<IssueData> {
     }
 
     lastFailure = formatFreshnessFailure(freshness);
+    console.log(`[cron] attempt ${attempt + 1}/${MAX_GENERATION_ATTEMPTS} failed freshness: ${lastFailure}`);
   }
 
   throw new Error(
