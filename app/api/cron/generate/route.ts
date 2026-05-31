@@ -196,12 +196,24 @@ async function getPreviousIssueContexts(nextIssueNumber: number): Promise<Previo
   });
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Wait 75 seconds between retries so the per-minute rate-limit window resets. */
+const RETRY_DELAY_MS = 75_000;
+
 async function generateFreshIssue(issueNumber: number): Promise<IssueData> {
   const previousIssues = await getPreviousIssueContexts(issueNumber);
   const previousIssueForPrompt = previousIssues.length > 0 ? previousIssues : null;
   let lastFailure = "";
 
   for (let attempt = 0; attempt < MAX_GENERATION_ATTEMPTS; attempt += 1) {
+    if (attempt > 0) {
+      console.log(`[cron] waiting ${RETRY_DELAY_MS / 1000}s before retry ${attempt + 1}…`);
+      await sleep(RETRY_DELAY_MS);
+    }
+
     const retryHint = attempt > 0 && lastFailure ? lastFailure : null;
     const generated = await generateIssue(issueNumber, {
       previousIssues: previousIssueForPrompt,
@@ -397,6 +409,10 @@ export async function GET(request: NextRequest) {
     const nextIssueNumber = await getNextIssueNumber();
     const generated = await generateFreshIssue(nextIssueNumber);
     const draft = await createDraftIssue(generated, DEFAULT_MODEL);
+
+    // Wait for rate-limit window to reset before making more Claude calls for WhatsApp card translations.
+    console.log("[cron] waiting 75s before WhatsApp card generation…");
+    await sleep(75_000);
     const cardsResult = await generateDraftCards(draft, generated);
     const previewHtml = buildPreviewEnvelopeHtml(draft, draft.htmlRendered, cardsResult);
 

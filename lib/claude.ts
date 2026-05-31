@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { sanitizeIssueData, stripCitationMarkup } from "@/lib/citation-sanitize";
 import { buildPreviousIssuePromptBlock, type PreviousIssueContext } from "@/lib/issue-freshness";
 
-const ANTHROPIC_REQUEST_TIMEOUT_MS = 95_000;
+const ANTHROPIC_REQUEST_TIMEOUT_MS = 150_000;
 
 let cachedAnthropic: Anthropic | null = null;
 
@@ -154,13 +154,21 @@ const RESEARCH_PROMPT = [
   "- Sandalwood or Karnataka context welcome in the field_note, but not forced into every story",
 ].join("\n");
 
-function isHttpsUrl(value: string): boolean {
+function isWebUrl(value: string): boolean {
   try {
-    const url = new URL(value);
-    return url.protocol === "https:";
+    const url = new URL(value.trim());
+    return url.protocol === "https:" || url.protocol === "http:";
   } catch {
     return false;
   }
+}
+
+function upgradeToHttps(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.startsWith("http://")) {
+    return trimmed.replace(/^http:\/\//, "https://");
+  }
+  return trimmed;
 }
 
 function normalizeGreetingBlurb(value: unknown): string {
@@ -291,13 +299,13 @@ function normalizeIssueData(input: unknown, issueNumber: number): IssueData {
         typeof src.name === "string"
           ? stripCitationMarkup(src.name)
           : "";
-      const url = typeof src.url === "string" ? src.url.trim() : "";
+      const rawUrl = typeof src.url === "string" ? src.url.trim() : "";
 
-      if (!name || !url || !isHttpsUrl(url)) {
-        throw new Error(`stories[${index}].sources[${sourceIndex}] must include a valid https URL.`);
+      if (!name || !rawUrl || !isWebUrl(rawUrl)) {
+        throw new Error(`stories[${index}].sources[${sourceIndex}] must include a valid URL.`);
       }
 
-      return { name, url };
+      return { name, url: upgradeToHttps(rawUrl) };
     });
 
     const action =
@@ -349,11 +357,11 @@ function normalizeIssueData(input: unknown, issueNumber: number): IssueData {
         : "";
     const source_url = typeof raw.source_url === "string" ? raw.source_url.trim() : "";
 
-    if (!value || !label || !source_name || !isHttpsUrl(source_url)) {
+    if (!value || !label || !source_name || !isWebUrl(source_url)) {
       throw new Error(`stats[${index}] is missing required fields or has invalid source_url.`);
     }
 
-    return { value, label, source_name, source_url };
+    return { value, label, source_name, source_url: upgradeToHttps(source_url) };
   });
 
   if (!Array.isArray(data.field_note) || data.field_note.length !== 2) {
