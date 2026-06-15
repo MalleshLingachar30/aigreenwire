@@ -412,6 +412,40 @@ export async function GET(request: NextRequest) {
 
     const editorEmail = getEditorEmail();
     const nextIssueNumber = await getNextIssueNumber();
+
+    // Idempotency guard: if a non-failed issue with this number already exists
+    // (e.g. a concurrent/retried cron invocation already generated it this week),
+    // skip rather than burn a Claude call and collide on the unique constraint.
+    const existing = (await sql`
+      SELECT id::text AS id, issue_number, slug, title, status
+      FROM issues
+      WHERE issue_number = ${nextIssueNumber}
+        AND status <> 'failed'
+      LIMIT 1
+    `) as DraftIssueRow[];
+
+    if (existing[0]) {
+      const found = existing[0];
+      console.log(
+        `[cron] issue #${nextIssueNumber} already exists (status ${found.status}); skipping generation.`
+      );
+      return NextResponse.json(
+        {
+          ok: true,
+          skipped: true,
+          reason: "issue-already-exists",
+          issue: {
+            id: found.id,
+            issueNumber: Number(found.issue_number),
+            slug: found.slug,
+            title: found.title,
+            status: found.status,
+          },
+        },
+        { status: 200 }
+      );
+    }
+
     const generation = await generateFreshIssue(nextIssueNumber);
     const draft = await createDraftIssue(generation.issue, DEFAULT_MODEL);
 
@@ -473,6 +507,19 @@ export async function GET(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
+    // A duplicate-key violation means another concurrent invocation won the race
+    // and already created this week's issue. That's a success, not a failure —
+    // report it as a skip so the cron run is not logged/alerted as a 500.
+    if (isUniqueViolation(error)) {
+      console.log(
+        "[cron] duplicate issue_number on insert — another invocation already generated this week's issue; skipping."
+      );
+      return NextResponse.json(
+        { ok: true, skipped: true, reason: "duplicate-issue-number-race" },
+        { status: 200 }
+      );
+    }
+
     const message =
       error instanceof Error ? error.message : "Failed to generate weekly issue.";
 
