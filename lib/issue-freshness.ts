@@ -78,6 +78,21 @@ export type FreshnessCheckResult = {
     laneLabel: string;
     previousIssueNumber: number;
     previousSubjectLine: string;
+    /** How many stories in the CURRENT issue map to this repeated lane. */
+    currentStoryCount: number;
+  }>;
+  /**
+   * Subset of repeatedTopicLaneMatches where the repeated lane is "dominant" —
+   * i.e. it appears in 2+ current stories. A single lead story in a repeated
+   * lane is tolerated (real news sometimes leads with the same topic); only a
+   * lane that dominates multiple stories blocks the issue.
+   */
+  dominantTopicLaneMatches: Array<{
+    laneId: string;
+    laneLabel: string;
+    previousIssueNumber: number;
+    previousSubjectLine: string;
+    currentStoryCount: number;
   }>;
   duplicateStatMatches: Array<{
     currentValue: string;
@@ -644,6 +659,7 @@ export function checkIssueFreshness(
     repeatedOpeningLens: null,
     repeatedOpeningStructure: null,
     repeatedTopicLaneMatches: [],
+    dominantTopicLaneMatches: [],
     duplicateStatMatches: [],
     similarFieldNote: null,
     similarGreetingBlurb: null,
@@ -672,6 +688,21 @@ export function checkIssueFreshness(
   const currentTopicLaneIds = new Set(
     detectTopicLanesFromText(buildCurrentIssueSearchText(currentIssue)).map((lane) => lane.id)
   );
+
+  // Count how many CURRENT stories map to each topic lane, so a lane that only
+  // surfaces in a single lead story can be tolerated while a lane that dominates
+  // multiple stories still blocks the issue.
+  const currentLaneStoryCounts = new Map<string, number>();
+  for (const story of currentIssue.stories) {
+    const seenForStory = new Set<string>();
+    for (const lane of detectTopicLanesForStory(story)) {
+      if (seenForStory.has(lane.id)) {
+        continue;
+      }
+      seenForStory.add(lane.id);
+      currentLaneStoryCounts.set(lane.id, (currentLaneStoryCounts.get(lane.id) ?? 0) + 1);
+    }
+  }
 
   // Opening-level checks only against most recent issue (N-1)
   const currentOpeningSentence = getOpeningSentence(currentIssue.greeting_blurb);
@@ -726,6 +757,7 @@ export function checkIssueFreshness(
           laneLabel: lane.label,
           previousIssueNumber: previousIssue.issueNumber,
           previousSubjectLine: previousIssue.subjectLine,
+          currentStoryCount: currentLaneStoryCounts.get(lane.id) ?? 1,
         });
       }
     }
@@ -897,6 +929,9 @@ export function checkIssueFreshness(
           }
         : null,
     repeatedTopicLaneMatches,
+    dominantTopicLaneMatches: repeatedTopicLaneMatches.filter(
+      (match) => match.currentStoryCount >= 2
+    ),
     duplicateStatMatches,
     similarFieldNote:
       worstFieldNoteSimilarity >= 0.30
@@ -917,6 +952,29 @@ export function checkIssueFreshness(
   };
 }
 
+/**
+ * Numeric "badness" score for a freshness result — lower is fresher.
+ * Used to pick the best generation attempt when none pass the gate cleanly,
+ * so the cron can always save the least-stale draft instead of failing.
+ * Weighted so the hardest blockers (dominant lanes, duplicate stats/sources)
+ * dominate the ranking; informational lead-only lanes are ignored.
+ */
+export function scoreFreshnessViolations(result: FreshnessCheckResult): number {
+  return (
+    result.dominantTopicLaneMatches.length * 5 +
+    result.duplicateSourceUrlMatches.length * 4 +
+    result.duplicateStatMatches.length * 4 +
+    result.repeatedSourceDomainMatches.length * 3 +
+    Math.max(0, result.similarHeadlineMatches.length - 1) * 3 +
+    (result.similarSubjectLine ? 2 : 0) +
+    (result.repeatedOpeningEntity ? 2 : 0) +
+    (result.repeatedOpeningLens ? 1 : 0) +
+    (result.repeatedOpeningStructure ? 1 : 0) +
+    (result.similarFieldNote ? 2 : 0) +
+    (result.similarGreetingBlurb ? 2 : 0)
+  );
+}
+
 export function isIssueFreshEnough(result: FreshnessCheckResult): boolean {
   const duplicateSources = result.duplicateSourceUrlMatches.length;
   const repeatedSourceDomains = result.repeatedSourceDomainMatches.length;
@@ -925,7 +983,10 @@ export function isIssueFreshEnough(result: FreshnessCheckResult): boolean {
   const repeatedOpeningEntity = result.repeatedOpeningEntity !== null;
   const repeatedOpeningLens = result.repeatedOpeningLens !== null;
   const repeatedOpeningStructure = result.repeatedOpeningStructure !== null;
-  const repeatedTopicLanes = result.repeatedTopicLaneMatches.length;
+  // A repeated topic lane only blocks when it DOMINATES the issue (2+ stories).
+  // A single lead story in a repeated lane is tolerated so a genuinely
+  // policy-dominant news week does not hard-fail generation.
+  const dominantTopicLanes = result.dominantTopicLaneMatches.length;
   const duplicateStats = result.duplicateStatMatches.length;
   const similarFieldNote = result.similarFieldNote !== null;
   const similarGreetingBlurb = result.similarGreetingBlurb !== null;
@@ -938,7 +999,7 @@ export function isIssueFreshEnough(result: FreshnessCheckResult): boolean {
     !repeatedOpeningEntity &&
     !repeatedOpeningLens &&
     !repeatedOpeningStructure &&
-    repeatedTopicLanes === 0 &&
+    dominantTopicLanes === 0 &&
     duplicateStats === 0 &&
     !similarFieldNote &&
     !similarGreetingBlurb
@@ -1006,9 +1067,23 @@ export function formatFreshnessFailure(result: FreshnessCheckResult): string {
     );
   }
 
-  if (result.repeatedTopicLaneMatches.length > 0) {
+  if (result.dominantTopicLaneMatches.length > 0) {
     lines.push(
-      `repeated topic lanes: ${result.repeatedTopicLaneMatches
+      `dominant repeated topic lanes (${result.dominantTopicLaneMatches.length}, blocking): ${result.dominantTopicLaneMatches
+        .map(
+          (match) =>
+            `${match.laneLabel} in ${match.currentStoryCount} stories (issue ${match.previousIssueNumber}: ${match.previousSubjectLine})`
+        )
+        .join("; ")}`
+    );
+  }
+
+  const leadOnlyLaneMatches = result.repeatedTopicLaneMatches.filter(
+    (match) => match.currentStoryCount < 2
+  );
+  if (leadOnlyLaneMatches.length > 0) {
+    lines.push(
+      `lead-only repeated topic lanes (allowed): ${leadOnlyLaneMatches
         .map((match) => `${match.laneLabel} (issue ${match.previousIssueNumber}: ${match.previousSubjectLine})`)
         .join("; ")}`
     );

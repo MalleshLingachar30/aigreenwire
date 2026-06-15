@@ -29,10 +29,85 @@ function getAnthropicClient(): Anthropic {
   return cachedAnthropic;
 }
 
+/** Bounded retry budget for transient rate-limit / overload errors. */
+const RATE_LIMIT_MAX_RETRIES = 3;
+/** Never wait longer than this for a single backoff, to stay within the cron's time budget. */
+const RATE_LIMIT_MAX_WAIT_MS = 30_000;
+
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getRetryAfterMs(error: unknown): number | null {
+  const headers = (error as { headers?: unknown })?.headers;
+  let retryAfter: string | null = null;
+
+  if (headers && typeof (headers as { get?: unknown }).get === "function") {
+    retryAfter = (headers as { get(name: string): string | null }).get("retry-after");
+  } else if (headers && typeof headers === "object") {
+    const record = headers as Record<string, string | string[] | undefined>;
+    const raw = record["retry-after"] ?? record["Retry-After"];
+    retryAfter = Array.isArray(raw) ? raw[0] ?? null : raw ?? null;
+  }
+
+  if (!retryAfter) {
+    return null;
+  }
+
+  const seconds = Number.parseInt(retryAfter, 10);
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : null;
+}
+
+function isRetriableAnthropicError(error: unknown): boolean {
+  const status = (error as { status?: number })?.status;
+  // 429 = rate limit, 529 = overloaded. 5xx transient server errors too.
+  return status === 429 || status === 529 || (typeof status === "number" && status >= 500 && status < 600);
+}
+
+/**
+ * Calls the Anthropic Messages API with on-error backoff that respects the
+ * `retry-after` header (the SDK's own retry ignores it). On 429/529/5xx it
+ * waits `retry-after` (capped) or an exponential backoff with jitter, then
+ * retries up to RATE_LIMIT_MAX_RETRIES times. This replaces the previous
+ * blanket 75s sleeps in the cron pipeline.
+ */
+async function createMessageWithBackoff(
+  ...args: Parameters<Anthropic["messages"]["create"]>
+): Promise<Awaited<ReturnType<Anthropic["messages"]["create"]>>> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= RATE_LIMIT_MAX_RETRIES; attempt += 1) {
+    try {
+      return await getAnthropicClient().messages.create(...args);
+    } catch (error) {
+      lastError = error;
+
+      if (attempt >= RATE_LIMIT_MAX_RETRIES || !isRetriableAnthropicError(error)) {
+        throw error;
+      }
+
+      const retryAfterMs = getRetryAfterMs(error);
+      const exponentialMs = Math.min(1000 * 2 ** attempt, RATE_LIMIT_MAX_WAIT_MS);
+      const baseWaitMs = Math.min(retryAfterMs ?? exponentialMs, RATE_LIMIT_MAX_WAIT_MS);
+      // ±20% jitter to avoid synchronized retries.
+      const jitterMs = baseWaitMs * 0.2 * (Math.random() - 0.5);
+      const waitMs = Math.max(0, Math.round(baseWaitMs + jitterMs));
+
+      console.log(
+        `[anthropic] retriable error (status ${(error as { status?: number })?.status}); ` +
+          `waiting ${Math.round(waitMs / 1000)}s before retry ${attempt + 1}/${RATE_LIMIT_MAX_RETRIES}`
+      );
+      await sleepMs(waitMs);
+    }
+  }
+
+  throw lastError;
+}
+
 export const anthropic = {
   messages: {
     create: ((...args: Parameters<Anthropic["messages"]["create"]>) =>
-      getAnthropicClient().messages.create(...args)) as Anthropic["messages"]["create"],
+      createMessageWithBackoff(...args)) as Anthropic["messages"]["create"],
   },
 };
 
@@ -106,10 +181,12 @@ function serializeErrorForLog(error: unknown): Record<string, unknown> {
 const RESEARCH_PROMPT = [
   'You are the research editor for "The AI Green Wire", a weekly newsletter published by Grobet India Agrotech covering AI developments in agriculture, agroforestry, forestry, biodiversity, and ecology — with special emphasis on India and Indian growers.',
   "",
-  "Your task: use the web_search tool to find the most important developments from the **past 7 days** in these domains. Prioritise:",
-  "1. India-specific AI-in-agriculture news (policy, product launches, pilot results)",
-  "2. Agroforestry, forestry, and carbon/biodiversity AI developments (global but India-relevant)",
-  "3. Opportunities for Indian students and researchers (PhDs, postdocs, challenges)",
+  "Your task: use the web_search tool to find the most important developments from the **past 7 days** across these domains, then assemble the most varied, genuinely-new issue possible:",
+  "- India AI-in-agriculture: prefer district/state field pilots, startup product launches, crop-specific results, cooperative/FPO deployments, and research benchmarks over central-government policy. National policy is welcome but NOT mandatory.",
+  "- Agroforestry, forestry, and carbon/biodiversity AI developments (global but India-relevant)",
+  "- Opportunities for Indian students and researchers (PhDs, postdocs, fellowships, challenges)",
+  "",
+  "Topic-balance rule (important): include AT MOST ONE India national-policy / ministry / central-scheme story in the whole issue, and only if it is genuinely the single biggest development of the week. Fill every other slot with non-policy categories: district pilots, startup launches, crop-specific pilot results, research benchmarks, biodiversity/market shifts, or student opportunities. Do NOT build multiple stories around the same national AI-farm-policy theme.",
   "",
   "Hard budget rule: this run must stay compact to avoid rate limits.",
   "- Use at most 4 broad web_search queries total",
@@ -135,7 +212,7 @@ const RESEARCH_PROMPT = [
   "- field_note: exactly 2 short paragraphs",
   "- Keep the full JSON response compact; avoid long paragraphs",
   "- Avoid recycling the same editorial frame from the previous issue; the subject line, greeting emphasis, and field note should feel newly written this week",
-  "- Avoid recycling the same semantic topic lane from recent issues even if you change the wording. Do not simply rerun the same India national AI-policy, Bharat-VISTAAR-style advisory rollout, India AI Mission agriculture, or Maharashtra AI-agriculture lane unless there is a genuinely material new development in the last 7 days.",
+  "- Avoid recycling the same semantic topic lane from recent issues even if you change the wording. A recently-used lane (India national AI-policy, Bharat-VISTAAR-style advisory rollout, India AI Mission agriculture, or Maharashtra AI-agriculture) may appear in AT MOST ONE lead story this week, and only if there is a genuinely material new development in the last 7 days. Never spread a recently-used lane across two or more stories — that will be rejected.",
   "- Opening freshness rule for greeting_blurb:",
   "  - The opening must feel clearly new relative to the previous issue",
   "  - Do not lead with the same person, institution, programme, ministry, or state in consecutive issues unless there is a materially larger follow-on development",

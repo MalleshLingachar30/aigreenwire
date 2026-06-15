@@ -10,11 +10,12 @@ import { sendEmail } from "@/lib/resend";
 import { buildAppUrl, isValidEmail, normalizeEmail } from "@/lib/subscription";
 import { renderIssue } from "@/lib/template";
 import { sanitizeIssueData } from "@/lib/citation-sanitize";
-import { generateTranslatedCards, upsertWhatsAppCards } from "@/lib/whatsapp-cards";
 import {
   checkIssueFreshness,
   formatFreshnessFailure,
   isIssueFreshEnough,
+  scoreFreshnessViolations,
+  type FreshnessCheckResult,
   type PreviousIssueContext,
 } from "@/lib/issue-freshness";
 
@@ -51,10 +52,11 @@ type InsertedDraft = {
   htmlRendered: string;
 };
 
-type GeneratedCardsResult = {
-  generated: boolean;
-  count: number;
-  error: string | null;
+type GenerationResult = {
+  issue: IssueData;
+  freshness: FreshnessCheckResult;
+  passedFreshness: boolean;
+  attempts: number;
 };
 
 const MAX_INSERT_ATTEMPTS = 3;
@@ -196,24 +198,26 @@ async function getPreviousIssueContexts(nextIssueNumber: number): Promise<Previo
   });
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/** Wait 75 seconds between retries so the per-minute rate-limit window resets. */
-const RETRY_DELAY_MS = 75_000;
-
-async function generateFreshIssue(issueNumber: number): Promise<IssueData> {
+/**
+ * Generate an issue, retrying for freshness up to MAX_GENERATION_ATTEMPTS.
+ *
+ * If an attempt passes the freshness gate, it is returned immediately. If no
+ * attempt passes, we DO NOT fail — we return the least-stale attempt (lowest
+ * scoreFreshnessViolations) flagged with passedFreshness=false, so the caller
+ * always has an approvable draft to review instead of starting from scratch.
+ *
+ * Rate-limit backoff is handled inside lib/claude's API wrapper, so there are
+ * no blanket sleeps here; this keeps the run comfortably within maxDuration.
+ */
+async function generateFreshIssue(issueNumber: number): Promise<GenerationResult> {
   const previousIssues = await getPreviousIssueContexts(issueNumber);
   const previousIssueForPrompt = previousIssues.length > 0 ? previousIssues : null;
+
+  let best: GenerationResult | null = null;
+  let bestScore = Number.POSITIVE_INFINITY;
   let lastFailure = "";
 
   for (let attempt = 0; attempt < MAX_GENERATION_ATTEMPTS; attempt += 1) {
-    if (attempt > 0) {
-      console.log(`[cron] waiting ${RETRY_DELAY_MS / 1000}s before retry ${attempt + 1}…`);
-      await sleep(RETRY_DELAY_MS);
-    }
-
     const retryHint = attempt > 0 && lastFailure ? lastFailure : null;
     const generated = await generateIssue(issueNumber, {
       previousIssues: previousIssueForPrompt,
@@ -222,16 +226,36 @@ async function generateFreshIssue(issueNumber: number): Promise<IssueData> {
     const freshness = checkIssueFreshness(generated, previousIssueForPrompt);
 
     if (isIssueFreshEnough(freshness)) {
-      return generated;
+      return {
+        issue: generated,
+        freshness,
+        passedFreshness: true,
+        attempts: attempt + 1,
+      };
+    }
+
+    const score = scoreFreshnessViolations(freshness);
+    if (score < bestScore) {
+      bestScore = score;
+      best = {
+        issue: generated,
+        freshness,
+        passedFreshness: false,
+        attempts: attempt + 1,
+      };
     }
 
     lastFailure = formatFreshnessFailure(freshness);
-    console.log(`[cron] attempt ${attempt + 1}/${MAX_GENERATION_ATTEMPTS} failed freshness: ${lastFailure}`);
+    console.log(
+      `[cron] attempt ${attempt + 1}/${MAX_GENERATION_ATTEMPTS} failed freshness (score ${score}): ${lastFailure}`
+    );
   }
 
-  throw new Error(
-    `Generated issue remained too similar to the previous issue after ${MAX_GENERATION_ATTEMPTS} attempts: ${lastFailure}`
+  // No attempt passed cleanly — return the least-stale one so a draft is always saved.
+  console.log(
+    `[cron] no attempt passed freshness; saving best attempt (score ${bestScore}) as a flagged draft.`
   );
+  return best!;
 }
 
 async function createDraftIssue(generated: IssueData, model: string): Promise<InsertedDraft> {
@@ -321,64 +345,45 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function buildCardsHubUrl(issueNumber: number, siteUrl: string): string {
-  return `${siteUrl}/w/${issueNumber}`;
-}
-
-async function generateDraftCards(draft: InsertedDraft, issueData: IssueData): Promise<GeneratedCardsResult> {
-  try {
-    const translatedCards = await generateTranslatedCards(issueData);
-    await upsertWhatsAppCards(draft.id, draft.issueNumber, translatedCards);
-
-    return {
-      generated: true,
-      count: translatedCards.length,
-      error: null,
-    };
-  } catch (error) {
-    return {
-      generated: false,
-      count: 0,
-      error: error instanceof Error ? error.message : "WhatsApp cards could not be generated.",
-    };
+function buildFreshnessBlock(generation: GenerationResult): string {
+  if (generation.passedFreshness) {
+    return `<div style="margin:0 0 18px;padding:14px 16px;border:1px solid #cfe7da;border-radius:14px;background:#f4fbf6;color:#0f5132;">
+      <p style="margin:0;font-size:13px;font-weight:700;">✓ Passed freshness checks (${generation.attempts} attempt${
+      generation.attempts === 1 ? "" : "s"
+    }). Safe to approve.</p>
+    </div>`;
   }
+
+  const warnings = formatFreshnessFailure(generation.freshness) || "freshness gate not satisfied";
+  return `<div style="margin:0 0 18px;padding:14px 16px;border:1px solid #f5c000;border-radius:14px;background:#fff8e1;color:#7a5d00;">
+    <p style="margin:0 0 8px;font-size:13px;font-weight:700;">⚠ Freshness warnings — review before sending</p>
+    <p style="margin:0;font-size:13px;line-height:1.5;">This is the freshest of ${generation.attempts} generation attempt${
+    generation.attempts === 1 ? "" : "s"
+  }, saved so you can edit rather than start from scratch. Outstanding issues:</p>
+    <p style="margin:8px 0 0;font-size:13px;line-height:1.5;color:#5c4600;">${escapeHtml(warnings)}</p>
+  </div>`;
 }
 
 function buildPreviewEnvelopeHtml(
   draft: InsertedDraft,
   htmlRendered: string,
-  cardsResult: GeneratedCardsResult
+  generation: GenerationResult
 ): string {
   const siteUrl = getSiteUrl();
   const encodedPassword = encodeURIComponent(getAdminPassword());
   const previewUrl = `${siteUrl}/api/admin/preview?id=${draft.id}&password=${encodedPassword}`;
   const approveUrl = `${siteUrl}/api/admin/approve?id=${draft.id}&password=${encodedPassword}`;
-  const cardsHubUrl = buildCardsHubUrl(draft.issueNumber, siteUrl);
-  const cardsBlock = cardsResult.generated
-    ? `<div style="margin:0 0 18px;padding:16px;border:1px solid #cfe7da;border-radius:14px;background:#f4fbf6;">
-      <p style="margin:0 0 10px;font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#0f766e;">WhatsApp Share Link</p>
-      <p style="margin:0 0 12px;font-size:14px;color:#0f172a;">Your multilingual WhatsApp hub for issue ${String(
-        draft.issueNumber
-      ).padStart(2, "0")} is ready. This is the single link to share across Kannada, Telugu, Tamil, and Hindi.</p>
-      <p style="margin:0 0 12px;">
-        <a href="${escapeHtml(
-          cardsHubUrl
-        )}" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:12px 18px;border-radius:999px;">Open WhatsApp Issue Hub</a>
-      </p>
-      <p style="margin:0;font-size:13px;color:#475569;">${escapeHtml(cardsHubUrl)}</p>
-    </div>`
-    : `<div style="margin:0 0 18px;padding:14px 16px;border:1px solid #fecaca;border-radius:14px;background:#fff7f7;color:#7f1d1d;">
-      <p style="margin:0 0 8px;font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">WhatsApp Hub Not Ready Yet</p>
-      <p style="margin:0;font-size:13px;line-height:1.5;">Cards could not be generated during the 6 AM draft run: ${escapeHtml(
-        cardsResult.error ?? "unknown error"
-      )}</p>
-    </div>`;
+
+  const cardsNote = `<div style="margin:0 0 18px;padding:12px 16px;border:1px solid #e2e8f0;border-radius:14px;background:#f8fafc;color:#475569;">
+    <p style="margin:0;font-size:13px;line-height:1.5;">WhatsApp cards (Kannada, Telugu, Tamil, Hindi) are generated automatically when you approve & send — no action needed here.</p>
+  </div>`;
 
   return [
     '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#0f172a;line-height:1.5;">',
     `<p><strong>Preview ready:</strong> Issue ${String(draft.issueNumber).padStart(2, "0")} (${escapeHtml(draft.slug)})</p>`,
+    buildFreshnessBlock(generation),
     "<p>Review the draft and approve when ready:</p>",
-    cardsBlock,
+    cardsNote,
     `<p style="margin:14px 0 16px;">
       <a href="${escapeHtml(previewUrl)}" style="display:inline-block;padding:10px 16px;background:#1d4ed8;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;margin-right:8px;">Preview Draft</a>
       <a href="${escapeHtml(approveUrl)}" style="display:inline-block;padding:10px 16px;background:#166534;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;">Approve &amp; Send</a>
@@ -407,18 +412,20 @@ export async function GET(request: NextRequest) {
 
     const editorEmail = getEditorEmail();
     const nextIssueNumber = await getNextIssueNumber();
-    const generated = await generateFreshIssue(nextIssueNumber);
-    const draft = await createDraftIssue(generated, DEFAULT_MODEL);
+    const generation = await generateFreshIssue(nextIssueNumber);
+    const draft = await createDraftIssue(generation.issue, DEFAULT_MODEL);
 
-    // Wait for rate-limit window to reset before making more Claude calls for WhatsApp card translations.
-    console.log("[cron] waiting 75s before WhatsApp card generation…");
-    await sleep(75_000);
-    const cardsResult = await generateDraftCards(draft, generated);
-    const previewHtml = buildPreviewEnvelopeHtml(draft, draft.htmlRendered, cardsResult);
+    // WhatsApp cards are intentionally NOT generated here — they are regenerated
+    // from scratch at approval time (see app/api/admin/approve/route.ts). Keeping
+    // them out of the cron removes the per-card Claude translation latency and the
+    // rate-limit sleep that previously pushed the run past maxDuration.
+    const previewHtml = buildPreviewEnvelopeHtml(draft, draft.htmlRendered, generation);
 
     const previewEmailId = await sendEmail({
       to: editorEmail,
-      subject: `[Preview] ${draft.subjectLine}`,
+      subject: generation.passedFreshness
+        ? `[Preview] ${draft.subjectLine}`
+        : `[Preview · review freshness] ${draft.subjectLine}`,
       html: previewHtml,
       tags: [
         { name: "flow", value: "weekly-pipeline" },
@@ -427,10 +434,17 @@ export async function GET(request: NextRequest) {
       ],
     });
 
+    const freshnessWarnings = generation.passedFreshness
+      ? null
+      : formatFreshnessFailure(generation.freshness);
+
     await sql`
       UPDATE issues
       SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({
         preview_email_id: previewEmailId,
+        passed_freshness: generation.passedFreshness,
+        freshness_warnings: freshnessWarnings,
+        generation_attempts: generation.attempts,
       })}::jsonb
       WHERE id = ${draft.id}
     `;
@@ -445,11 +459,10 @@ export async function GET(request: NextRequest) {
           title: draft.title,
           status: draft.status,
         },
-        whatsapp: {
-          hubUrl: buildCardsHubUrl(draft.issueNumber, getSiteUrl()),
-          generated: cardsResult.generated,
-          cardsCount: cardsResult.count,
-          error: cardsResult.error,
+        freshness: {
+          passed: generation.passedFreshness,
+          attempts: generation.attempts,
+          warnings: freshnessWarnings,
         },
         preview: {
           to: editorEmail,

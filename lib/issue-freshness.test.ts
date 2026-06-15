@@ -2,11 +2,32 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   checkIssueFreshness,
+  formatFreshnessFailure,
   isIssueFreshEnough,
   normalizeStatValue,
+  scoreFreshnessViolations,
+  type FreshnessCheckResult,
   type PreviousIssueContext,
 } from "@/lib/issue-freshness";
 import type { IssueData } from "@/lib/claude";
+
+/** A fully-clean FreshnessCheckResult (no violations) for unit-testing helpers. */
+function emptyFreshness(): FreshnessCheckResult {
+  return {
+    duplicateSourceUrlMatches: [],
+    repeatedSourceDomainMatches: [],
+    similarHeadlineMatches: [],
+    similarSubjectLine: null,
+    repeatedOpeningEntity: null,
+    repeatedOpeningLens: null,
+    repeatedOpeningStructure: null,
+    repeatedTopicLaneMatches: [],
+    dominantTopicLaneMatches: [],
+    duplicateStatMatches: [],
+    similarFieldNote: null,
+    similarGreetingBlurb: null,
+  };
+}
 
 test("flags overlapping headlines and repeated source URLs against previous issue", () => {
   const previousIssue: PreviousIssueContext = {
@@ -766,4 +787,264 @@ test("flags repeated source-domain clusters when the same domain dominates anoth
   assert.equal(result.repeatedSourceDomainMatches.length, 1);
   assert.equal(result.repeatedSourceDomainMatches[0]!.domain, "fao.org");
   assert.equal(isIssueFreshEnough(result), false);
+});
+
+// --- Lead-only topic-lane exception -------------------------------------
+
+// Reusable filler stories so each lane test has valid section counts
+// (3 india / 4 forestry / 2 students) and no incidental cross-issue overlap.
+function buildFreshFillerStories(): IssueData["stories"] {
+  return [
+    {
+      section: "forestry",
+      tag: "FORESTRY",
+      headline: "Remote canopy audit reduces wildfire blind spots in dry forests",
+      paragraphs: ["p1", "p2"],
+      sources: [{ name: "Gov", url: "https://forestscan.org/fill-1" }],
+    },
+    {
+      section: "forestry",
+      tag: "FORESTRY",
+      headline: "LiDAR restoration pilot maps erosion corridors in degraded hills",
+      paragraphs: ["p1", "p2"],
+      sources: [{ name: "Gov", url: "https://lidarrestoration.net/fill-2" }],
+    },
+    {
+      section: "forestry",
+      tag: "FORESTRY",
+      headline: "Agroforestry traceability trial links timber plots to verified ledgers",
+      paragraphs: ["p1", "p2"],
+      sources: [{ name: "Gov", url: "https://timberledger.io/fill-3" }],
+    },
+    {
+      section: "forestry",
+      tag: "FORESTRY",
+      headline: "Mangrove monitoring tool spots salinity stress weeks earlier",
+      paragraphs: ["p1", "p2"],
+      sources: [{ name: "Gov", url: "https://mangrovelab.org/fill-4" }],
+    },
+    {
+      section: "students",
+      tag: "FELLOWSHIP",
+      headline: "Applied ecology AI studio opens cohort for field robotics projects",
+      paragraphs: ["p1", "p2"],
+      sources: [{ name: "Gov", url: "https://ecoaistudio.org/fill-5" }],
+    },
+    {
+      section: "students",
+      tag: "PHD",
+      headline: "New remote sensing challenge funds masters teams in watershed mapping",
+      paragraphs: ["p1", "p2"],
+      sources: [{ name: "Gov", url: "https://watershedchallenge.edu/fill-6" }],
+    },
+  ];
+}
+
+const policyLanePrevIssue: PreviousIssueContext = {
+  issueNumber: 9,
+  subjectLine:
+    "The AI Green Wire · Issue 09 · India's national AI farm advisory push gathers pace",
+  greetingBlurb:
+    "Namaste. Carbon market shifts reshaped investor expectations this week. That matters because growers track downstream pricing. Watch how cooperatives respond before monsoon.",
+  fieldNote: ["Old note one.", "Old note two."],
+  stories: [
+    {
+      section: "india",
+      headline: "Budget 2026–27 Unveils Bharat-VISTAAR for Nationwide Farm Advisory",
+      sourceUrls: ["https://example.com/old-vistaar"],
+    },
+    {
+      section: "india",
+      headline: "India AI Mission names agriculture a national priority sector",
+      sourceUrls: ["https://example.com/old-mission"],
+    },
+  ],
+  stats: [
+    { value: "1", label: "a", sourceUrl: "https://example.com/p1" },
+    { value: "2", label: "b", sourceUrl: "https://example.com/p2" },
+    { value: "3", label: "c", sourceUrl: "https://example.com/p3" },
+    { value: "4", label: "d", sourceUrl: "https://example.com/p4" },
+  ],
+};
+
+test("allows a repeated topic lane when it maps to a single lead story", () => {
+  const currentIssue: IssueData = {
+    issue_number: 10,
+    subject_line:
+      "The AI Green Wire · Issue 10 · District pilots and market tools take the lead",
+    greeting_blurb:
+      "Namaste. District crop-disease pilots widened across three states this week. That field impact matters because growers can act on detection before losses spread. Watch whether neighbouring blocks adopt the same workflow before kharif.",
+    stories: [
+      // ONE India national-policy lead (repeats the prev lane)
+      {
+        section: "india",
+        tag: "POLICY",
+        headline: "National AI farm advisory stack moves closer to nationwide rollout",
+        paragraphs: ["p1", "p2"],
+        sources: [{ name: "PIB", url: "https://example.com/new-policy-1" }],
+      },
+      // Two clearly different India stories (different lanes)
+      {
+        section: "india",
+        tag: "FIELD",
+        headline: "Satellite irrigation audit helps drought districts prioritize repairs",
+        paragraphs: ["p1", "p2"],
+        sources: [{ name: "Gov", url: "https://waterwatch.in/new-2" }],
+      },
+      {
+        section: "india",
+        tag: "MARKET",
+        headline: "Farmer producer groups test pricing copilots for mandi timing",
+        paragraphs: ["p1", "p2"],
+        sources: [{ name: "Gov", url: "https://mandiintel.ai/new-3" }],
+      },
+      ...buildFreshFillerStories(),
+    ],
+    stats: [
+      { value: "550K", label: "tonnes carbon sequestered", source_name: "x", source_url: "https://example.com/c1" },
+      { value: "12", label: "new AI startups funded", source_name: "x", source_url: "https://example.com/c2" },
+      { value: "78%", label: "detection accuracy", source_name: "x", source_url: "https://example.com/c3" },
+      { value: "3.2M", label: "hectares under monitoring", source_name: "x", source_url: "https://example.com/c4" },
+    ],
+    field_note: ["Brand new advice about pest management.", "Specific seasonal guidance for monsoon prep."],
+  };
+
+  const result = checkIssueFreshness(currentIssue, policyLanePrevIssue);
+
+  // The lane IS detected as repeated...
+  assert.ok(
+    result.repeatedTopicLaneMatches.some(
+      (match) => match.laneId === "national-ai-farm-policy-push"
+    ),
+    "repeated policy lane should still be detected"
+  );
+  // ...but it maps to only one current story, so it is NOT dominant.
+  assert.equal(result.dominantTopicLaneMatches.length, 0, "single lead should not be dominant");
+  // Lead-only repeat is tolerated → issue passes the gate.
+  assert.equal(isIssueFreshEnough(result), true);
+});
+
+test("blocks a repeated topic lane when it dominates two or more stories", () => {
+  const currentIssue: IssueData = {
+    issue_number: 10,
+    subject_line:
+      "The AI Green Wire · Issue 10 · National AI farm policy push dominates again",
+    greeting_blurb:
+      "Namaste. District crop-disease pilots widened across three states this week. That field impact matters because growers can act on detection before losses spread. Watch whether neighbouring blocks adopt the same workflow before kharif.",
+    stories: [
+      // TWO India national-policy stories (same lane → dominant)
+      {
+        section: "india",
+        tag: "POLICY",
+        headline: "National AI farm advisory stack moves closer to nationwide rollout",
+        paragraphs: ["p1", "p2"],
+        sources: [{ name: "PIB", url: "https://example.com/new-policy-1" }],
+      },
+      {
+        section: "india",
+        tag: "MISSION",
+        headline: "India AI Mission ties fresh central funding to national farm advisory deployment",
+        paragraphs: ["p1", "p2"],
+        sources: [{ name: "IndiaAI", url: "https://example.com/new-policy-2" }],
+      },
+      {
+        section: "india",
+        tag: "FIELD",
+        headline: "Satellite irrigation audit helps drought districts prioritize repairs",
+        paragraphs: ["p1", "p2"],
+        sources: [{ name: "Gov", url: "https://waterwatch.in/new-3" }],
+      },
+      ...buildFreshFillerStories(),
+    ],
+    stats: [
+      { value: "550K", label: "tonnes carbon sequestered", source_name: "x", source_url: "https://example.com/c1" },
+      { value: "12", label: "new AI startups funded", source_name: "x", source_url: "https://example.com/c2" },
+      { value: "78%", label: "detection accuracy", source_name: "x", source_url: "https://example.com/c3" },
+      { value: "3.2M", label: "hectares under monitoring", source_name: "x", source_url: "https://example.com/c4" },
+    ],
+    field_note: ["Brand new advice about pest management.", "Specific seasonal guidance for monsoon prep."],
+  };
+
+  const result = checkIssueFreshness(currentIssue, policyLanePrevIssue);
+
+  const dominant = result.dominantTopicLaneMatches.find(
+    (match) => match.laneId === "national-ai-farm-policy-push"
+  );
+  assert.ok(dominant, "policy lane spanning 2 stories should be dominant");
+  assert.ok(dominant!.currentStoryCount >= 2);
+  assert.equal(isIssueFreshEnough(result), false);
+});
+
+test("formatFreshnessFailure labels dominant vs lead-only lane repeats distinctly", () => {
+  const dominantResult: FreshnessCheckResult = {
+    ...emptyFreshness(),
+    repeatedTopicLaneMatches: [
+      {
+        laneId: "national-ai-farm-policy-push",
+        laneLabel: "national AI farm policy push",
+        previousIssueNumber: 9,
+        previousSubjectLine: "Issue 09",
+        currentStoryCount: 2,
+      },
+    ],
+    dominantTopicLaneMatches: [
+      {
+        laneId: "national-ai-farm-policy-push",
+        laneLabel: "national AI farm policy push",
+        previousIssueNumber: 9,
+        previousSubjectLine: "Issue 09",
+        currentStoryCount: 2,
+      },
+    ],
+  };
+  const dominantMsg = formatFreshnessFailure(dominantResult);
+  assert.ok(dominantMsg.includes("dominant repeated topic lanes"), dominantMsg);
+  assert.ok(dominantMsg.includes("blocking"), dominantMsg);
+
+  const leadOnlyResult: FreshnessCheckResult = {
+    ...emptyFreshness(),
+    repeatedTopicLaneMatches: [
+      {
+        laneId: "national-ai-farm-policy-push",
+        laneLabel: "national AI farm policy push",
+        previousIssueNumber: 9,
+        previousSubjectLine: "Issue 09",
+        currentStoryCount: 1,
+      },
+    ],
+    dominantTopicLaneMatches: [],
+  };
+  const leadOnlyMsg = formatFreshnessFailure(leadOnlyResult);
+  assert.ok(leadOnlyMsg.includes("lead-only"), leadOnlyMsg);
+  assert.ok(!leadOnlyMsg.includes("dominant repeated topic lanes"), leadOnlyMsg);
+});
+
+test("scoreFreshnessViolations ranks more-violating results higher", () => {
+  const clean = emptyFreshness();
+  assert.equal(scoreFreshnessViolations(clean), 0);
+
+  const oneDominantLane: FreshnessCheckResult = {
+    ...emptyFreshness(),
+    dominantTopicLaneMatches: [
+      {
+        laneId: "national-ai-farm-policy-push",
+        laneLabel: "national AI farm policy push",
+        previousIssueNumber: 9,
+        previousSubjectLine: "Issue 09",
+        currentStoryCount: 2,
+      },
+    ],
+  };
+  const twoDupSources: FreshnessCheckResult = {
+    ...emptyFreshness(),
+    duplicateSourceUrlMatches: [
+      { sourceUrl: "https://example.com/a", currentHeadline: "x", previousHeadline: "px" },
+      { sourceUrl: "https://example.com/b", currentHeadline: "y", previousHeadline: "py" },
+    ],
+  };
+
+  assert.ok(scoreFreshnessViolations(oneDominantLane) > 0);
+  assert.ok(scoreFreshnessViolations(twoDupSources) > scoreFreshnessViolations(clean));
+  // A clean result must always rank below any result with violations.
+  assert.ok(scoreFreshnessViolations(clean) < scoreFreshnessViolations(oneDominantLane));
 });
