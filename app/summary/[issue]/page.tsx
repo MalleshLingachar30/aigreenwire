@@ -33,6 +33,10 @@ const SECTION_KICKERS = {
   students: "Open doors for the next generation",
 } as const;
 
+const SANDALWOOD_PLATFORM_URL = "https://sandalwood.growbetterindia.com";
+const CONTACT_PHONE = "7899910288";
+const CONTACT_EMAIL = "editor@aigreenwire.com";
+
 async function findIssue(issueParam: string): Promise<SummaryIssueRow | null> {
   if (issueParam === "latest") {
     const rows = (await sql`
@@ -124,27 +128,87 @@ export default async function SummaryArtifactPage({ params }: SummaryPageProps) 
         <section className="overflow-hidden rounded-[32px] border border-[#c7d9a8] bg-[#fbf8ef] shadow-[0_28px_90px_rgba(23,52,4,0.08)]">
           <div className="relative overflow-hidden bg-[#173404] px-6 py-8 sm:px-10 sm:py-10">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(192,221,151,0.18),transparent_34%),radial-gradient(circle_at_bottom_left,rgba(151,196,89,0.16),transparent_28%)]" />
-            <div className="relative flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <div className="inline-flex items-center gap-3 rounded-full border border-[#97c459]/50 bg-[#284d0e]/70 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#d7edb4]">
-                  <span className="inline-flex h-2.5 w-2.5 rounded-full bg-[#c0dd97]" />
-                  AI Green Wire Weekly Summary
+            <div className="relative flex flex-col gap-6">
+              <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+                <div className="max-w-3xl">
+                  <div className="inline-flex items-center gap-3 rounded-full border border-[#97c459]/50 bg-[#284d0e]/70 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#d7edb4]">
+                    <span className="inline-flex h-2.5 w-2.5 rounded-full bg-[#c0dd97]" />
+                    AI Green Wire Weekly Summary
+                  </div>
+                  <h1 className="mt-5 max-w-3xl [font-family:Georgia,serif] text-[3rem] font-medium leading-[1] text-[#eef7df] sm:text-[3.35rem]">
+                    <span className="text-[#eef7df]">AI Green </span>
+                    <span className="text-[#d7edb4]">Wire</span>
+                  </h1>
+                  <p className="mt-3 max-w-2xl text-sm leading-6 text-[#d7edb4] sm:text-base">
+                    A shareable weekly headline artifact for AI in agriculture,
+                    agroforestry, forestry, biodiversity and ecology.
+                  </p>
                 </div>
-                <h1 className="mt-5 max-w-3xl [font-family:Georgia,serif] text-4xl font-medium leading-tight text-[#eef7df] sm:text-5xl">
-                  The AI Green Wire
-                </h1>
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-[#d7edb4] sm:text-base">
-                  A shareable weekly headline artifact for AI in agriculture,
-                  agroforestry, forestry, biodiversity and ecology.
-                </p>
+
+                <div className="flex flex-wrap gap-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#d7edb4] lg:justify-end">
+                  <span className="rounded-full border border-[#97c459]/35 bg-[#1d3d09] px-3 py-1.5">
+                    Issue {formatIssueNumber(issueRow.issue_number)}
+                  </span>
+                  <span className="rounded-full border border-[#97c459]/35 bg-[#1d3d09] px-3 py-1.5">
+                    Published {formatPublishedDate(publishedAt)}
+                  </span>
+                  <span className="rounded-full border border-[#97c459]/35 bg-[#1d3d09] px-3 py-1.5">
+                    Monday Edition
+                  </span>
+                </div>
               </div>
 
-              <div className="rounded-[22px] border border-[#97c459]/35 bg-[#132a04]/80 px-4 py-4 text-right text-[#eef7df]">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#c0dd97]">
-                  Issue {formatIssueNumber(issueRow.issue_number)}
-                </div>
-                <div className="mt-2 text-sm text-[#d7edb4]">
-                  Published {formatPublishedDate(publishedAt)}
+              <div className="rounded-[28px] border border-[#97c459]/35 bg-[linear-gradient(145deg,rgba(19,42,4,0.92),rgba(33,71,10,0.88))] p-5 text-[#eef7df] shadow-[0_18px_40px_rgba(0,0,0,0.18)] sm:p-6">
+                <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr] lg:items-start">
+                  <div>
+                    <div className="inline-flex rounded-full border border-[#97c459]/35 bg-[#1d3d09] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#d7edb4]">
+                      Sandalwood Feature
+                    </div>
+                    <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#c0dd97]">
+                      Sandalwood Intelligence Platform
+                    </p>
+                    <h2 className="mt-3 max-w-3xl [font-family:Georgia,serif] text-[1.65rem] leading-[1.1] text-[#eef7df] sm:text-[2.15rem]">
+                      India&apos;s first intelligence platform for sandalwood
+                      investors.
+                    </h2>
+                  </div>
+
+                  <div className="grid gap-5 lg:justify-items-end">
+                    <ul className="space-y-2 text-[14px] leading-6 text-[#d7edb4] lg:max-w-md">
+                      <li className="flex gap-3">
+                        <span className="text-[#c0dd97]">☞</span>
+                        <span>In under two minutes, design your own plantation and see exactly what it costs to grow sandalwood and what it could earn.</span>
+                      </li>
+                      <li className="flex gap-3">
+                        <span className="text-[#c0dd97]">☞</span>
+                        <span>Use the investment calculator to estimate your returns clearly, without the guesswork.</span>
+                      </li>
+                      <li className="flex gap-3">
+                        <span className="text-[#c0dd97]">☞</span>
+                        <span>Plan large land holdings with confidence, from first sapling to final harvest.</span>
+                      </li>
+                      <li className="flex gap-3">
+                        <span className="text-[#c0dd97]">☞</span>
+                        <span>See the added CSR, ESG and carbon value your plantation creates.</span>
+                      </li>
+                    </ul>
+                    <div className="flex flex-wrap gap-3 lg:justify-end">
+                      <Link
+                        href={SANDALWOOD_PLATFORM_URL}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center rounded-full bg-[#eef7df] px-4 py-2.5 text-sm font-semibold text-[#173404] transition hover:bg-white"
+                      >
+                        Explore Sandalwood Platform
+                      </Link>
+                      <Link
+                        href={`/issues/${issueRow.slug}`}
+                        className="inline-flex items-center rounded-full border border-[#97c459]/40 bg-transparent px-4 py-2.5 text-sm font-semibold text-[#eef7df] transition hover:border-[#c0dd97] hover:bg-[#1d3d09]"
+                      >
+                        Read Full Issue
+                      </Link>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -154,17 +218,17 @@ export default async function SummaryArtifactPage({ params }: SummaryPageProps) 
             <section className="grid gap-6 lg:grid-cols-[1.45fr_0.95fr]">
               <article className="rounded-[28px] border border-[#dfe9cb] bg-white/80 p-6 shadow-[0_18px_40px_rgba(23,52,4,0.05)]">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#6a8f2c]">
-                  This Week&apos;s Cover Signal
+                  This Week&apos;s Cover Story
                 </p>
                 <h2 className="mt-3 [font-family:Georgia,serif] text-2xl leading-tight text-[#173404] sm:text-3xl">
                   {issueRow.title}
                 </h2>
                 <p className="mt-4 text-sm leading-7 text-[#3f4a35] sm:text-[15px]">
-                  A compact, shareable readout of this week&apos;s key signals
-                  from the full issue. Use this page as a repeatable template:
-                  switch the URL to <span className="font-semibold text-[#173404]">/summary/latest</span> for
-                  the newest released issue, or to a fixed issue number when you
-                  want a locked weekly version.
+                  A compact public readout of this week&apos;s strongest highlights
+                  across agriculture, agroforestry, forestry, biodiversity and
+                  ecology. Built for quick sharing, scanning and follow-through
+                  into the full issue when readers want the deeper sourcing and
+                  context.
                 </p>
                 <div className="mt-6 flex flex-wrap gap-3">
                   <Link
@@ -184,14 +248,14 @@ export default async function SummaryArtifactPage({ params }: SummaryPageProps) 
 
               <aside className="rounded-[28px] border border-[#d7e5bd] bg-[#eff6df] p-6 shadow-[0_18px_40px_rgba(23,52,4,0.05)]">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#6a8f2c]">
-                  Subscribe CTA
+                  Delivered Every Monday
                 </p>
                 <h3 className="mt-3 [font-family:Georgia,serif] text-2xl leading-tight text-[#173404]">
                   Get the Monday morning brief in your inbox.
                 </h3>
                 <ul className="mt-5 space-y-3 text-sm leading-6 text-[#314026]">
                   <li>Free weekly issue on AI in farming, forestry and ecology.</li>
-                  <li>India-first editorial lens with practical field and market signals.</li>
+                  <li>India-first editorial lens with practical field and market updates.</li>
                   <li>Archive access after signup with one-click unsubscribe.</li>
                 </ul>
                 <Link
@@ -242,10 +306,10 @@ export default async function SummaryArtifactPage({ params }: SummaryPageProps) 
             </section>
 
             <section className="rounded-[28px] border border-[#d7e5bd] bg-[linear-gradient(135deg,#eff6df_0%,#fbf8ef_55%,#f6f1df_100%)] p-6 sm:p-8">
-              <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+              <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-end">
                 <div className="max-w-2xl">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#6a8f2c]">
-                    Reusable Footer CTA
+                    Subscribe Or Contact The Editorial Desk
                   </p>
                   <h3 className="mt-2 [font-family:Georgia,serif] text-2xl leading-tight text-[#173404] sm:text-3xl">
                     Want the full brief every Monday instead of the recap?
@@ -254,9 +318,12 @@ export default async function SummaryArtifactPage({ params }: SummaryPageProps) 
                     Subscribe to get the complete issue with story detail,
                     source links, numbers, field notes and the archive.
                   </p>
+                  <p className="mt-5 border-t border-[#d7e5bd] pt-4 text-sm font-medium text-[#314026]">
+                    {CONTACT_EMAIL} | {CONTACT_PHONE}
+                  </p>
                 </div>
 
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-wrap gap-3 lg:justify-end">
                   <Link
                     href="/?archive=subscribe"
                     className="inline-flex items-center rounded-full bg-[#173404] px-5 py-3 text-sm font-semibold text-[#eef7df] transition hover:bg-[#244f0a]"
