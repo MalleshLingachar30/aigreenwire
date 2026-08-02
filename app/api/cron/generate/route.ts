@@ -4,12 +4,14 @@ import {
   ISSUE_GENERATION_MODEL,
   type IssueData,
 } from "@/lib/claude";
+import { generateAndStoreKannadaSharePreview } from "@/lib/card-share-previews";
 import { sql } from "@/lib/db";
 import { isCronRequestAuthorized } from "@/lib/api-auth";
-import { sendEmail } from "@/lib/resend";
+import { batchSendEmails, sendEmail } from "@/lib/resend";
 import { buildAppUrl, isValidEmail, normalizeEmail } from "@/lib/subscription";
+import { renderIssueForSubscriber } from "@/lib/issue-email";
 import { renderIssue } from "@/lib/template";
-import { sanitizeIssueData } from "@/lib/citation-sanitize";
+import { parseStoredIssueData, sanitizeIssueData } from "@/lib/citation-sanitize";
 import {
   checkIssueFreshness,
   formatFreshnessFailure,
@@ -18,6 +20,12 @@ import {
   type FreshnessCheckResult,
   type PreviousIssueContext,
 } from "@/lib/issue-freshness";
+import {
+  LANGUAGE_CONFIG,
+  type Language,
+  generateTranslatedCards,
+  upsertWhatsAppCards,
+} from "@/lib/whatsapp-cards";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -33,6 +41,23 @@ type DraftIssueRow = {
   title: string;
   subject_line: string;
   status: string;
+};
+
+type ExistingIssueRow = DraftIssueRow & {
+  stories_json: unknown;
+  metadata: unknown;
+};
+
+type SubscriberRow = {
+  id: string;
+  email: string;
+  unsubscribe_token: string;
+};
+
+type SentLogEntry = {
+  subscriberId: string;
+  email: string;
+  resendId: string | null;
 };
 
 type PreviousIssueRow = {
@@ -62,6 +87,8 @@ type GenerationResult = {
 const MAX_INSERT_ATTEMPTS = 3;
 const MAX_GENERATION_ATTEMPTS = 3;
 const DEFAULT_MODEL = ISSUE_GENERATION_MODEL;
+const RESEND_BATCH_SIZE = 100;
+const LANGUAGE_SEQUENCE: Language[] = ["kn", "te", "ta", "hi"];
 
 function getEditorEmail(): string {
   const raw = process.env.EDITOR_EMAIL ?? "";
@@ -90,6 +117,61 @@ function getAdminPassword(): string {
   }
 
   return value.trim();
+}
+
+function isDeliverableNewsletterEmail(email: string): boolean {
+  const normalized = normalizeEmail(email);
+  if (!isValidEmail(normalized)) {
+    return false;
+  }
+
+  return !(
+    normalized.endsWith("@example.com") ||
+    normalized.endsWith("@example.org") ||
+    normalized.endsWith("@example.net")
+  );
+}
+
+function chunkArray<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+
+  return chunks;
+}
+
+function metadataObject(value: unknown): Record<string, unknown> {
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : {};
+    } catch {
+      return {};
+    }
+  }
+
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function shouldAutoSendPreparedDraft(issue: ExistingIssueRow, now = new Date()): boolean {
+  if (issue.status !== "draft") {
+    return false;
+  }
+
+  const metadata = metadataObject(issue.metadata);
+  const autoSendAt = metadata.auto_send_at_utc;
+  if (metadata.auto_send !== true || typeof autoSendAt !== "string") {
+    return false;
+  }
+
+  const dueAtMs = Date.parse(autoSendAt);
+  return Number.isFinite(dueAtMs) && dueAtMs <= now.getTime();
 }
 
 function slugify(input: string): string {
@@ -137,6 +219,7 @@ async function cleanUpStaleDrafts(): Promise<number> {
     DELETE FROM issues
     WHERE status IN ('draft', 'failed')
       AND generated_at < NOW() - INTERVAL '24 hours'
+      AND COALESCE(metadata->>'auto_send', 'false') <> 'true'
     RETURNING id
   `) as Array<{ id: string }>;
 
@@ -196,6 +279,317 @@ async function getPreviousIssueContexts(nextIssueNumber: number): Promise<Previo
       })),
     };
   });
+}
+
+async function findConfirmedSubscribers(): Promise<SubscriberRow[]> {
+  const rows = (await sql`
+    SELECT
+      id::text AS id,
+      LOWER(email) AS email,
+      unsubscribe_token::text AS unsubscribe_token
+    FROM subscribers
+    WHERE confirmed_at IS NOT NULL
+      AND unsubscribed_at IS NULL
+    ORDER BY subscribed_at ASC, id ASC
+  `) as SubscriberRow[];
+
+  return rows.filter((row) => isDeliverableNewsletterEmail(row.email));
+}
+
+async function insertSentLogs(issueId: string, rows: SentLogEntry[]): Promise<void> {
+  if (!rows.length) {
+    return;
+  }
+
+  const payload = rows.map((row) => ({
+    subscriber_id: row.subscriberId,
+    email: row.email,
+    resend_id: row.resendId,
+  }));
+
+  await sql`
+    INSERT INTO send_log (issue_id, subscriber_id, email, resend_id, status)
+    SELECT
+      ${issueId}::uuid,
+      entry.subscriber_id::uuid,
+      entry.email::text,
+      entry.resend_id::text,
+      'sent'
+    FROM jsonb_to_recordset(${JSON.stringify(payload)}::jsonb) AS entry(
+      subscriber_id text,
+      email text,
+      resend_id text
+    )
+  `;
+}
+
+async function sendIssueToConfirmedSubscribers(
+  issue: ExistingIssueRow,
+  issueData: ReturnType<typeof parseStoredIssueData>,
+  subscribers: SubscriberRow[]
+): Promise<number> {
+  let sentCount = 0;
+
+  for (const subscriberChunk of chunkArray(subscribers, RESEND_BATCH_SIZE)) {
+    const emails = subscriberChunk.map((subscriber) => ({
+      to: subscriber.email,
+      subject: issue.subject_line,
+      html: renderIssueForSubscriber(issueData, issue.slug, subscriber.unsubscribe_token),
+      tags: [
+        { name: "flow", value: "weekly-pipeline" },
+        { name: "action", value: "auto-send-prepared-draft" },
+        { name: "issue_id", value: issue.id },
+      ],
+    }));
+
+    const batchResults = await batchSendEmails(emails);
+    if (batchResults.length !== subscriberChunk.length) {
+      throw new Error("Resend batch response count did not match subscriber batch size.");
+    }
+
+    const resendIdByEmail = new Map(
+      batchResults.map((result) => [normalizeEmail(result.to), result.id])
+    );
+
+    await insertSentLogs(
+      issue.id,
+      subscriberChunk.map((subscriber) => ({
+        subscriberId: subscriber.id,
+        email: subscriber.email,
+        resendId: resendIdByEmail.get(subscriber.email) ?? null,
+      }))
+    );
+    sentCount += subscriberChunk.length;
+  }
+
+  return sentCount;
+}
+
+function buildCardPreviewLinks(
+  issueNumber: number,
+  siteUrl: string,
+  encodedPassword: string
+): Record<Language, string[]> {
+  const links: Record<Language, string[]> = {
+    kn: [],
+    te: [],
+    ta: [],
+    hi: [],
+  };
+
+  for (const language of LANGUAGE_SEQUENCE) {
+    for (const cardNumber of [1, 2, 3] as const) {
+      links[language].push(
+        `${siteUrl}/api/cards/preview?issue=${issueNumber}&lang=${language}&card=${cardNumber}&password=${encodedPassword}`
+      );
+    }
+  }
+
+  return links;
+}
+
+function buildCardLanguageLinks(issueNumber: number, siteUrl: string): Record<Language, string> {
+  const issuePrefix = `${siteUrl}/c/${issueNumber}`;
+
+  return {
+    kn: `${issuePrefix}/kn`,
+    te: `${issuePrefix}/te`,
+    ta: `${issuePrefix}/ta`,
+    hi: `${issuePrefix}/hi`,
+  };
+}
+
+function buildCardsHubUrl(issueNumber: number, siteUrl: string): string {
+  return `${siteUrl}/w/${issueNumber}`;
+}
+
+function buildCardsDeliveryEmailHtml(
+  issue: ExistingIssueRow,
+  linksByLanguage: Record<Language, string[]>,
+  languageLinksByLanguage: Record<Language, string>,
+  hubUrl: string,
+  galleryUrl: string
+): string {
+  const sections = LANGUAGE_SEQUENCE.map((language) => {
+    const label = `${LANGUAGE_CONFIG[language].name} (${LANGUAGE_CONFIG[language].nativeName})`;
+    const languageUrl = languageLinksByLanguage[language];
+    const links = linksByLanguage[language]
+      .map(
+        (url, index) =>
+          `<li style="margin-bottom:6px;"><a href="${escapeHtml(url)}" style="color:#0f766e;text-decoration:none;">Card ${index + 1}</a><br/><span style="font-size:12px;color:#475569;">${escapeHtml(
+            url
+          )}</span></li>`
+      )
+      .join("");
+
+    return `<section style="margin:16px 0 20px;">
+      <h3 style="margin:0 0 8px;font-size:16px;color:#0f172a;">${escapeHtml(label)}</h3>
+      <p style="margin:0 0 10px;font-size:13px;color:#0f172a;"><strong>Shareable 3-card reader:</strong> <a href="${escapeHtml(
+        languageUrl
+      )}" style="color:#0f766e;text-decoration:none;">${escapeHtml(languageUrl)}</a></p>
+      <ul style="margin:0;padding-left:18px;color:#0f172a;">${links}</ul>
+    </section>`;
+  }).join("");
+
+  return [
+    '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#0f172a;line-height:1.55;">',
+    `<h2 style="margin:0 0 10px;">WhatsApp cards ready · Issue ${String(issue.issue_number).padStart(
+      2,
+      "0"
+    )}</h2>`,
+    `<p style="margin:0 0 10px;">English newsletter delivery is complete. Use the multilingual issue hub as the main share link, or open the language readers below when you need a language-only page.</p>`,
+    `<div style="margin:0 0 16px;padding:16px;border:1px solid #cfe7da;border-radius:14px;background:#f4fbf6;">
+      <p style="margin:0 0 10px;font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#0f766e;">Primary Share Link</p>
+      <p style="margin:0 0 12px;font-size:14px;color:#0f172a;">Send this single issue hub when you want one multilingual WhatsApp-ready link for all 12 cards.</p>
+      <p style="margin:0 0 12px;">
+        <a href="${escapeHtml(
+          hubUrl
+        )}" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:12px 18px;border-radius:999px;">Open WhatsApp Issue Hub</a>
+      </p>
+      <p style="margin:0;font-size:13px;color:#475569;">${escapeHtml(hubUrl)}</p>
+    </div>`,
+    `<p style="margin:0 0 14px;"><strong>Gallery:</strong> <a href="${escapeHtml(galleryUrl)}">${escapeHtml(
+      galleryUrl
+    )}</a></p>`,
+    sections,
+    "<p style=\"margin:10px 0 0;color:#475569;\">Manual forwarding flow: send the hub URL when you want one multilingual link, or use the language readers below for a single-language forwarding flow.</p>",
+    "</div>",
+  ].join("");
+}
+
+async function autoSendPreparedDraft(issue: ExistingIssueRow): Promise<{
+  sentCount: number;
+  cardsGenerated: boolean;
+  cardsCount: number;
+  cardsError: string | null;
+}> {
+  const lockRows = (await sql`
+    UPDATE issues
+    SET
+      status = 'sending',
+      approved_at = COALESCE(approved_at, NOW()),
+      error_log = NULL,
+      metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({
+        auto_send_started_at: new Date().toISOString(),
+      })}::jsonb
+    WHERE id = ${issue.id}
+      AND status = 'draft'
+      AND metadata->>'auto_send' = 'true'
+      AND (metadata->>'auto_send_at_utc')::timestamptz <= NOW()
+    RETURNING id::text AS id
+  `) as Array<{ id: string }>;
+
+  if (!lockRows[0]) {
+    throw new Error("Prepared draft could not be locked for auto-send.");
+  }
+
+  try {
+    const siteUrl = getSiteUrl();
+    const adminPassword = getAdminPassword();
+    const encodedPassword = encodeURIComponent(adminPassword);
+    const issueData = parseStoredIssueData(issue.stories_json, Number(issue.issue_number));
+    const subscribers = await findConfirmedSubscribers();
+
+    if (subscribers.length === 0) {
+      throw new Error("No confirmed subscribers available for delivery.");
+    }
+
+    const sentCount = await sendIssueToConfirmedSubscribers(issue, issueData, subscribers);
+
+    await sql`
+      UPDATE issues
+      SET
+        status = 'sent',
+        approved_at = COALESCE(approved_at, NOW()),
+        sent_at = NOW(),
+        sent_count = ${sentCount},
+        error_log = NULL,
+        metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({
+          auto_send_status: "sent",
+          auto_send_completed_at: new Date().toISOString(),
+        })}::jsonb
+      WHERE id = ${issue.id}
+    `;
+
+    let cardsGenerated = false;
+    let cardsCount = 0;
+    let cardsError: string | null = null;
+    const cardsGalleryUrl = `${siteUrl}/api/cards/gallery?issue=${issue.issue_number}&password=${encodedPassword}`;
+
+    try {
+      const translatedCards = await generateTranslatedCards(issueData);
+      await upsertWhatsAppCards(issue.id, Number(issue.issue_number), translatedCards);
+      cardsGenerated = true;
+      cardsCount = translatedCards.length;
+
+      try {
+        await generateAndStoreKannadaSharePreview({
+          issueId: issue.id,
+          issueNumber: Number(issue.issue_number),
+          origin: siteUrl,
+        });
+      } catch (previewFailure) {
+        const message =
+          previewFailure instanceof Error
+            ? previewFailure.message
+            : "Kannada short-link preview generation failed.";
+        cardsError = `Kannada preview warning: ${message}`;
+        console.error("[cron] Kannada share preview generation failure:", previewFailure);
+      }
+
+      const editorEmail = getEditorEmail();
+      const linksByLanguage = buildCardPreviewLinks(
+        Number(issue.issue_number),
+        siteUrl,
+        encodedPassword
+      );
+      const languageLinksByLanguage = buildCardLanguageLinks(Number(issue.issue_number), siteUrl);
+      const cardsHubUrl = buildCardsHubUrl(Number(issue.issue_number), siteUrl);
+      const cardsEmailHtml = buildCardsDeliveryEmailHtml(
+        issue,
+        linksByLanguage,
+        languageLinksByLanguage,
+        cardsHubUrl,
+        cardsGalleryUrl
+      );
+
+      await sendEmail({
+        to: editorEmail,
+        subject: `[Cards] Issue ${String(issue.issue_number).padStart(2, "0")} manual forwarding links`,
+        html: cardsEmailHtml,
+        tags: [
+          { name: "flow", value: "weekly-pipeline" },
+          { name: "action", value: "auto-cards-links" },
+          { name: "issue_id", value: issue.id },
+        ],
+      });
+    } catch (cardsFailure) {
+      cardsError =
+        cardsFailure instanceof Error
+          ? cardsFailure.message
+          : "WhatsApp card generation/link email failed.";
+      console.error("[cron] WhatsApp card generation or delivery failure:", cardsFailure);
+    }
+
+    return { sentCount, cardsGenerated, cardsCount, cardsError };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message.slice(0, 800) : "Unknown auto-send error";
+
+    await sql`
+      UPDATE issues
+      SET
+        status = 'failed',
+        error_log = ${message},
+        metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({
+          auto_send_status: "failed",
+          auto_send_failed_at: new Date().toISOString(),
+        })}::jsonb
+      WHERE id = ${issue.id}
+    `;
+
+    throw error;
+  }
 }
 
 /**
@@ -413,19 +807,49 @@ export async function GET(request: NextRequest) {
     const editorEmail = getEditorEmail();
     const nextIssueNumber = await getNextIssueNumber();
 
-    // Idempotency guard: if a non-failed issue with this number already exists
-    // (e.g. a concurrent/retried cron invocation already generated it this week),
-    // skip rather than burn a Claude call and collide on the unique constraint.
+    // Idempotency guard: if a non-failed issue with this number already exists,
+    // either auto-send it when explicitly scheduled, or skip generation.
     const existing = (await sql`
-      SELECT id::text AS id, issue_number, slug, title, status
+      SELECT
+        id::text AS id,
+        issue_number,
+        slug,
+        title,
+        subject_line,
+        stories_json,
+        status,
+        metadata
       FROM issues
       WHERE issue_number = ${nextIssueNumber}
         AND status <> 'failed'
       LIMIT 1
-    `) as DraftIssueRow[];
+    `) as ExistingIssueRow[];
 
     if (existing[0]) {
       const found = existing[0];
+      if (shouldAutoSendPreparedDraft(found)) {
+        console.log(
+          `[cron] issue #${nextIssueNumber} is a prepared auto-send draft; sending now.`
+        );
+
+        const result = await autoSendPreparedDraft(found);
+        return NextResponse.json(
+          {
+            ok: true,
+            action: "auto-sent-prepared-draft",
+            issue: {
+              id: found.id,
+              issueNumber: Number(found.issue_number),
+              slug: found.slug,
+              title: found.title,
+              status: "sent",
+            },
+            delivery: result,
+          },
+          { status: 200 }
+        );
+      }
+
       console.log(
         `[cron] issue #${nextIssueNumber} already exists (status ${found.status}); skipping generation.`
       );
@@ -433,7 +857,7 @@ export async function GET(request: NextRequest) {
         {
           ok: true,
           skipped: true,
-          reason: "issue-already-exists",
+          reason: found.status === "draft" ? "draft-exists-not-due-for-auto-send" : "issue-already-exists",
           issue: {
             id: found.id,
             issueNumber: Number(found.issue_number),
