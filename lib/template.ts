@@ -21,7 +21,7 @@ const EDITOR_BLURBS = [
   "Three hundred signals. Nine stories. One briefing. That is the weekly distillation I promise you. Hit reply if there is a topic you want me to dig into.",
   "I sift through hundreds of research papers, policy briefs and market signals each week to bring you the developments that matter for Indian growers. Let me know what you think.",
   "Each week I track AI developments across agriculture, forestry and ecology so you can focus on the field. Reply with what you would like to see next.",
-  "From lab papers to farm gates \u2014 I read the signals so you can act on them. If something is missing from this briefing, just reply.",
+  "From lab papers to farm gates, I read the signals so you can act on them. I look for items that can help a grower, student, researcher, or forest team make a better decision this week. Some stories are big research updates; others are small clues from the field that are easy to miss. If something is missing from this briefing, just reply.",
 ];
 
 const PAGE_BREAK_LABELS = [

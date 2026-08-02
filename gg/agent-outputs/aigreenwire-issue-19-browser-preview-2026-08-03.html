@@ -1,0 +1,650 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>The AI Green Wire · Issue 19 · Rice GenAI gets grounded, soybean breeding gets sensors, and forest data opens up</title>
+  <style>
+    :root {
+      --ink: #182218;
+      --muted: #5c6658;
+      --faint: #eef1e6;
+      --paper: #f9f6ed;
+      --panel: #ffffff;
+      --grobet: #456f1b;
+      --moss: #7a9d35;
+      --rust: #a45d1a;
+      --ochre: #d4a13a;
+      --line: #dbe3ce;
+      --shadow: 0 20px 50px rgba(32, 45, 24, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(90deg, rgba(69, 111, 27, 0.08) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(164, 93, 26, 0.05), rgba(249, 246, 237, 0.96) 34rem),
+        var(--paper);
+      background-size: 48px 48px, auto, auto;
+      font-family: ui-serif, Georgia, Cambria, "Times New Roman", serif;
+      line-height: 1.55;
+    }
+
+    a {
+      color: var(--grobet);
+      text-decoration-thickness: 1px;
+      text-underline-offset: 3px;
+    }
+
+    .page {
+      width: min(1120px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 56px;
+    }
+
+    .masthead {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 280px;
+      gap: 32px;
+      align-items: end;
+      padding: 36px 0 28px;
+      border-bottom: 3px solid var(--ink);
+    }
+
+    .brand {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      color: var(--grobet);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .mark {
+      display: grid;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      border: 2px solid var(--grobet);
+      border-radius: 50%;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      max-width: 820px;
+      margin: 18px 0 0;
+      font-size: clamp(42px, 8vw, 92px);
+      line-height: 0.9;
+      letter-spacing: 0;
+      font-weight: 500;
+    }
+
+    .issue-chip {
+      justify-self: end;
+      width: 100%;
+      border: 1px solid var(--ink);
+      background: rgba(255, 255, 255, 0.72);
+      padding: 18px;
+      box-shadow: var(--shadow);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .issue-chip strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 15px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .issue-chip span {
+      display: block;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .lead {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 28px;
+      align-items: stretch;
+      margin: 28px 0 38px;
+    }
+
+    .greeting {
+      background: var(--ink);
+      color: #f7f4e8;
+      padding: 28px;
+      min-height: 100%;
+      font-size: 21px;
+      line-height: 1.52;
+      box-shadow: var(--shadow);
+    }
+
+    .freshness {
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.72);
+      padding: 24px;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .freshness h2,
+    .section-heading h2,
+    .numbers h2,
+    .field-note h2 {
+      margin: 0;
+      font-family: ui-serif, Georgia, Cambria, "Times New Roman", serif;
+      font-size: 31px;
+      line-height: 1;
+      font-weight: 500;
+      letter-spacing: 0;
+    }
+
+    .freshness ul {
+      padding: 0;
+      margin: 18px 0 0;
+      list-style: none;
+      display: grid;
+      gap: 10px;
+    }
+
+    .freshness li {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      border-top: 1px solid var(--line);
+      padding-top: 10px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .freshness b {
+      color: var(--ink);
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .issue-section {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr);
+      gap: 34px;
+      padding: 38px 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .section-heading {
+      position: sticky;
+      top: 18px;
+      align-self: start;
+    }
+
+    .section-heading p {
+      margin: 0 0 12px;
+      color: var(--muted);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .story-list {
+      display: grid;
+      gap: 16px;
+    }
+
+    .story {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      padding: 22px;
+      box-shadow: 0 12px 30px rgba(32, 45, 24, 0.08);
+    }
+
+    .story-meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .story-number {
+      color: var(--rust);
+      font-weight: 900;
+      font-size: 13px;
+    }
+
+    .tag {
+      border: 1px solid var(--line);
+      background: var(--faint);
+      color: var(--grobet);
+      padding: 4px 9px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .story h3 {
+      max-width: 780px;
+      margin: 0 0 12px;
+      font-size: 24px;
+      line-height: 1.18;
+      font-weight: 500;
+      letter-spacing: 0;
+    }
+
+    .story-copy p,
+    .action {
+      margin: 0 0 12px;
+      color: #273324;
+      font-size: 17px;
+    }
+
+    .action {
+      margin-top: 16px;
+      padding-left: 14px;
+      border-left: 4px solid var(--ochre);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 15px;
+      line-height: 1.55;
+    }
+
+    .sources {
+      margin: 16px 0 0;
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 13px;
+    }
+
+    .numbers {
+      padding: 38px 0;
+      border-top: 3px solid var(--ink);
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 20px;
+    }
+
+    .stat {
+      min-height: 190px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      background: var(--ink);
+      color: #f8f4e7;
+      padding: 18px;
+    }
+
+    .stat:nth-child(2) { background: var(--rust); }
+    .stat:nth-child(3) { background: var(--grobet); }
+    .stat:nth-child(4) { background: #5f4624; }
+
+    .stat-value {
+      font-size: 34px;
+      line-height: 0.95;
+      letter-spacing: 0;
+    }
+
+    .stat p {
+      margin: 12px 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .stat a {
+      color: #f8f4e7;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 12px;
+    }
+
+    .field-note {
+      margin-top: 14px;
+      padding: 30px;
+      background: #efe5cf;
+      border: 1px solid #d8c397;
+      box-shadow: var(--shadow);
+    }
+
+    .field-note .eyebrow {
+      margin: 0 0 8px;
+      color: var(--rust);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+    }
+
+    .field-note p:not(.eyebrow) {
+      max-width: 860px;
+      margin: 16px 0 0;
+      font-size: 18px;
+      line-height: 1.62;
+    }
+
+    footer {
+      margin-top: 34px;
+      padding-top: 22px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 13px;
+    }
+
+    @media (max-width: 860px) {
+      .masthead,
+      .lead,
+      .issue-section {
+        grid-template-columns: 1fr;
+      }
+
+      .issue-chip {
+        justify-self: stretch;
+      }
+
+      .section-heading {
+        position: static;
+      }
+
+      .stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 560px) {
+      .page {
+        width: min(100% - 22px, 1120px);
+        padding-top: 14px;
+      }
+
+      .masthead {
+        padding-top: 22px;
+      }
+
+      h1 {
+        font-size: 44px;
+      }
+
+      .greeting,
+      .freshness,
+      .story,
+      .field-note {
+        padding: 18px;
+      }
+
+      .story h3 {
+        font-size: 21px;
+      }
+
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media print {
+      body {
+        background: #fff;
+      }
+
+      .page {
+        width: 100%;
+      }
+
+      .story,
+      .stat,
+      .field-note,
+      .greeting,
+      .freshness {
+        box-shadow: none;
+      }
+
+      .section-heading {
+        position: static;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="masthead">
+      <div>
+        <div class="brand"><span class="mark">GB</span><span>Grow Better India / AI Green Wire</span></div>
+        <h1>The AI Green Wire</h1>
+      </div>
+      <aside class="issue-chip">
+        <strong>Issue 19</strong>
+        <span>Prepared for Monday, August 3, 2026 at 06:00 IST</span>
+        <span>Strict freshness window: July 29-August 2, 2026</span>
+      </aside>
+    </header>
+
+    <section class="lead">
+      <div class="greeting">Namaste. We begin with a new rice farming study from India that asks how AI advice can become more useful for farmers. This week also brings soybean research, forest information that more people can use, Amazon wildlife tracking, early warnings for problem plants, India's new tiger count, and two useful openings for students and researchers.</div>
+      <aside class="freshness">
+        <h2>Freshness Check</h2>
+        <ul>
+          <li><span>Story sources</span><b>9 / 9 current week</b></li>
+          <li><span>Section balance</span><b>3 + 4 + 2</b></li>
+          <li><span>Duplicate Issue 18 sources</span><b>0</b></li>
+          <li><span>Repeated stats</span><b>0</b></li>
+        </ul>
+      </aside>
+    </section>
+
+    
+    <section class="issue-section section-india">
+      <div class="section-heading">
+        <p>Current-week signals for farm advisory, crop research, and digital public infrastructure.</p>
+        <h2>India AI In Agriculture</h2>
+      </div>
+      <div class="story-list">
+        
+    <article class="story">
+      <div class="story-meta">
+        <span class="story-number">01</span>
+        <span class="tag">Rice advisory</span>
+      </div>
+      <h3>A new Frontiers review makes rice the test bed for whether generative AI can turn agronomic science into safer farmer advice.</h3>
+      <div class="story-copy">
+        <p>Frontiers in Artificial Intelligence published a July 29 review focused on generative AI for rice systems in India. The authors do not treat chatbots as magic wrappers around farm advice. Their sharper point is that useful advisory systems must connect language models with crop simulation, remote sensing diagnostics, knowledge graphs, and human oversight so that advice stays tied to agronomic evidence.</p>
+<p>That is a fresh shift from last week's national deployment numbers. The question is no longer only how many farmers receive an AI advisory, but whether the advisory can explain its reasoning, handle local crop context, and avoid unsupported recommendations when the farmer is making a time-sensitive decision on water, pests, disease, or crop stage.</p>
+      </div>
+      <p class="action"><strong>What you can do:</strong> If you are evaluating a farm AI tool, ask what agronomic model, local evidence base, and human review process sit behind the answer before trusting its fluency.</p>
+      <p class="sources">Source: <a href="https://www.frontiersin.org/journals/artificial-intelligence/articles/10.3389/frai.2026.1808028/full" target="_blank" rel="noreferrer">Frontiers in Artificial Intelligence</a></p>
+    </article>
+
+    <article class="story">
+      <div class="story-meta">
+        <span class="story-number">02</span>
+        <span class="tag">Soybean breeding</span>
+      </div>
+      <h3>A new India-US soybean project puts AI, sensor networks, and drone data into crop-breeding decisions before the 2026 research cycle starts.</h3>
+      <div class="story-copy">
+        <p>The Economic Times reported on July 31 that the US National Science Foundation is backing a three-year India-US project to build smart farming systems for soybean breeding. The award is USD 528,137, with the project scheduled from October 1, 2026 to September 30, 2029, and partners across the University of Memphis, University of Missouri, Kennesaw State University, IIT Delhi, Sher-e-Kashmir University of Agricultural Sciences and Technology of Jammu and Kashmir, and ICAR's National Soybean Research Institute.</p>
+<p>The fresh point is that the project is not only about yield prediction after the season. It is meant to combine smart sensor networks, NextG wireless, drone data, passive sensing, crop and soil monitoring, phenotyping, pest management, and AI tools so breeders and field teams can observe stress earlier and connect field evidence to selection decisions.</p>
+      </div>
+      <p class="action"><strong>What you can do:</strong> For breeding and seed teams, treat AI as a field-instrumentation problem first: decide which stress, phenotype, soil, and pest signals must be captured before model claims can be evaluated.</p>
+      <p class="sources">Source: <a href="https://economictimes.indiatimes.com/news/economy/agriculture/us-nsf-backs-india-us-ai-project-to-boost-soybean-breeding/articleshow/132762224.cms?from=mdr" target="_blank" rel="noreferrer">The Economic Times</a></p>
+    </article>
+
+    <article class="story">
+      <div class="story-meta">
+        <span class="story-number">03</span>
+        <span class="tag">Digital public infrastructure</span>
+      </div>
+      <h3>A July 30 Indian public-administration article puts AI agriculture inside the harder question of digital public infrastructure.</h3>
+      <div class="story-copy">
+        <p>Sage Journals lists a July 30 OnlineFirst article in the Indian Journal of Public Administration on transforming Indian agriculture through new-age technologies. The keywords make the frame clear: artificial intelligence, digital public infrastructure, AgriStack, Soil Health Card, Kisan.ai, and India.</p>
+<p>That makes the item a clean fit for tomorrow's issue because it moves the AI conversation away from one-off tools and into public infrastructure design. After last week's policy-and-scale coverage, the current-week question is integration quality: whether digital rails can connect identity, plots, soil, markets, advisory, credit, insurance, and extension into usable farm decisions.</p>
+      </div>
+      <p class="action"><strong>What you can do:</strong> When reviewing a digital-agriculture deployment, ask which exact farmer decision it improves and which other data rails it must connect to before the answer is reliable.</p>
+      <p class="sources">Source: <a href="https://journals.sagepub.com/doi/10.1177/00195561261470872" target="_blank" rel="noreferrer">Sage Journals</a></p>
+    </article>
+      </div>
+    </section>
+    
+    <section class="issue-section section-forestry">
+      <div class="section-heading">
+        <p>Fresh monitoring, carbon, species-risk, and wildlife data stories from July 30 to August 2.</p>
+        <h2>Forestry, Biodiversity & Ecology</h2>
+      </div>
+      <div class="story-list">
+        
+    <article class="story">
+      <div class="story-meta">
+        <span class="story-number">01</span>
+        <span class="tag">Amazon monitoring</span>
+      </div>
+      <h3>Acaté's July field report shows biodiversity AI moving closer to Indigenous monitoring practice in the Amazon.</h3>
+      <div class="story-copy">
+        <p>Acaté published a July 30 field update on integrating machine learning with Indigenous rainforest expertise for biodiversity monitoring. The project uses image-recognition workflows on data from monitoring devices deployed by Indigenous ecology experts, with the practical aim of making species observations easier to manage and interpret in high-diversity Amazonian field conditions.</p>
+<p>The important signal is governance and context. Forest-cover alerts are now familiar, but comparable early-warning systems for biodiversity loss are harder because species evidence is messier and more local. Acaté's work points to a better model: machine learning that supports field teams already reading the forest, rather than replacing local ecological interpretation.</p>
+      </div>
+      <p class="action"><strong>What you can do:</strong> For biodiversity AI pilots, design the workflow around the people who collect and validate observations, not only around the model that classifies images.</p>
+      <p class="sources">Source: <a href="https://acateamazon.org/field-updates/july-2026-integrated-biodiversity/" target="_blank" rel="noreferrer">Acaté Amazon Conservation</a></p>
+    </article>
+
+    <article class="story">
+      <div class="story-meta">
+        <span class="story-number">02</span>
+        <span class="tag">Forest carbon</span>
+      </div>
+      <h3>Sylvera's open Atlantic Forest dataset raises the bar for AI-assisted forest-carbon measurement.</h3>
+      <div class="story-copy">
+        <p>The Rockefeller Foundation announced on July 30 that Sylvera is launching an Open Carbon Data Project for Brazil's Atlantic Forest with combined funding from the Rockefeller Foundation and Meta. The project is framed as the first open-access, benchmark-grade forest-carbon dataset for the biome, combining field measurements with advanced remote sensing and targeting a CC BY 4.0 open dataset in Q4 2026.</p>
+<p>This matters beyond Brazil because digital measurement, reporting, and verification is only as credible as its calibration data. Open benchmark data can help carbon teams test whether canopy-height maps, remote-sensing models, and AI carbon estimates are accurate enough for restoration finance, jurisdictional programmes, and buyer scrutiny.</p>
+      </div>
+      <p class="action"><strong>What you can do:</strong> For forest-carbon projects, ask whether model estimates can be checked against open field-calibrated benchmarks, not only proprietary dashboards.</p>
+      <p class="sources">Source: <a href="https://www.rockefellerfoundation.org/news/sylvera-launches-open-carbon-data-project-investment-brazilian-atlantic-forest-rockefeller-foundation-and-meta/" target="_blank" rel="noreferrer">The Rockefeller Foundation</a></p>
+    </article>
+
+    <article class="story">
+      <div class="story-meta">
+        <span class="story-number">03</span>
+        <span class="tag">Invasive species</span>
+      </div>
+      <h3>A new machine-learning invasion-risk framework shows how ecology AI can move upstream of damage.</h3>
+      <div class="story-copy">
+        <p>The Applied Ecologist highlighted new research on July 30 using machine learning to predict invasion success before non-native plants spread widely. The framework draws on data for more than 1,000 plant species introduced to 15 Caribbean islands and reports accuracy above 90% while also quantifying uncertainty around high-risk species.</p>
+<p>The management lesson is useful for forestry and restoration teams everywhere. AI is most valuable when it helps managers prioritise early surveillance and prevention, not only explain damage after a species is established. For plantations, reserves, wetlands, and restoration sites, the model question becomes: which incoming species should be watched first, and what confidence is good enough to trigger action?</p>
+      </div>
+      <p class="action"><strong>What you can do:</strong> Build invasive-risk registers before planting or restoration work starts, then use field sightings to update the risk list rather than waiting for visible spread.</p>
+      <p class="sources">Source: <a href="https://appliedecologistsblog.com/2026/07/30/using-machine-learning-to-predict-invasion-success/" target="_blank" rel="noreferrer">The Applied Ecologist</a></p>
+    </article>
+
+    <article class="story">
+      <div class="story-meta">
+        <span class="story-number">04</span>
+        <span class="tag">Wildlife census</span>
+      </div>
+      <h3>India's new tiger count asks a bigger question: how are animals, prey, habitats, and forests doing?</h3>
+      <div class="story-copy">
+        <p>The Times of India reported on August 2 that India has begun the sixth cycle of the All India Tiger Estimation exercise, which will continue through 2027. The reported scope goes beyond tiger counts to co-predators, prey base, habitat, and the wider forest ecosystem, while the Tigers Outside Tiger Reserves project supports monitoring in roughly 80 forest divisions across 10 states.</p>
+<p>For AI Green Wire readers, the signal is that national wildlife monitoring is becoming a broad data operation. Camera traps, field surveys, habitat records, and outside-reserve monitoring create the kind of evidence base where AI can help only if the underlying protocols remain comparable across landscapes and seasons.</p>
+      </div>
+      <p class="action"><strong>What you can do:</strong> When assessing wildlife AI tools, ask whether they strengthen long-running census protocols or create a separate data stream that managers cannot compare with past cycles.</p>
+      <p class="sources">Source: <a href="https://timesofindia.indiatimes.com/city/jaipur/india-launches-worlds-largest-tiger-estimation-exercise-wii-intensifies-caracal-conservation-in-rajasthan/articleshow/132792006.cms" target="_blank" rel="noreferrer">The Times of India</a></p>
+    </article>
+      </div>
+    </section>
+    
+    <section class="issue-section section-students">
+      <div class="section-heading">
+        <p>Active August routes for remote sensing, climate AI, and applied environmental data work.</p>
+        <h2>Students & Researchers</h2>
+      </div>
+      <div class="story-list">
+        
+    <article class="story">
+      <div class="story-meta">
+        <span class="story-number">01</span>
+        <span class="tag">Research openings</span>
+      </div>
+      <h3>ISRO NRSC opened temporary research-personnel recruitment on August 1, giving remote-sensing and agriculture candidates a fresh applied route.</h3>
+      <div class="story-copy">
+        <p>ISRO's National Remote Sensing Centre has opened advertisement NRSC-RMT-1-2026 for temporary research personnel in Hyderabad. The official page lists the advertisement date as August 1, 2026, the status as open, and the last date for online applications as August 21, 2026.</p>
+<p>This is one of the strongest fresh student and researcher signals for this issue because remote sensing is now central to agricultural intelligence, crop monitoring, forest monitoring, and climate-risk assessment. Candidates from remote sensing, GIS, computer science, agriculture, AI, ML, environmental science, and related fields should treat the window as active now, not as a later-August task.</p>
+      </div>
+      <p class="action"><strong>What you can do:</strong> Check the official NRSC advertisement first, then shortlist only roles where your project work clearly connects to remote sensing, geospatial analysis, AI, agriculture, or environmental monitoring.</p>
+      <p class="sources">Source: <a href="https://www.isro.gov.in/NRSCRecruitment2026_1.html" target="_blank" rel="noreferrer">ISRO</a></p>
+    </article>
+
+    <article class="story">
+      <div class="story-meta">
+        <span class="story-number">02</span>
+        <span class="tag">Climate AI workshop</span>
+      </div>
+      <h3>IIT Madras has opened an August hands-on AI workshop for students and researchers working on climate and energy systems.</h3>
+      <div class="story-copy">
+        <p>The Times of India reported on July 29 that the AI4NetZero team at IIT Madras will host a three-day hands-on workshop, AI in Action: Climate and Energy Systems Applications, from August 7 to 9. The programme is aimed at students, researchers, and industry professionals working with AI, machine learning, and data science in climate research, energy systems, and renewable power.</p>
+<p>The student value is practical rather than ceremonial. The reported agenda includes renewable-energy forecasting, power-system optimisation, predictive maintenance, climate modelling, Google Colab tutorials, real datasets, and reusable notebooks. That is a useful bridge for students who want environmental AI work that can be inspected, rerun, and extended after the workshop.</p>
+      </div>
+      <p class="action"><strong>What you can do:</strong> If you apply or attend, arrive with one small dataset or problem statement so the workshop output can become a portfolio notebook, not just a participation certificate.</p>
+      <p class="sources">Source: <a href="https://timesofindia.indiatimes.com/education/news/iit-madras-to-host-ai-workshop-on-climate-and-energy-systems-applications/articleshow/132704597.cms" target="_blank" rel="noreferrer">The Times of India</a></p>
+    </article>
+      </div>
+    </section>
+
+    <section class="numbers">
+      <h2>Numbers To Watch</h2>
+      <div class="stats-grid">
+        
+              <article class="stat">
+                <div>
+                  <div class="stat-value">USD 528,137</div>
+                  <p>US NSF award reported for the India-US smart farming systems project for soybean breeding.</p>
+                </div>
+                <a href="https://economictimes.indiatimes.com/news/economy/agriculture/us-nsf-backs-india-us-ai-project-to-boost-soybean-breeding/articleshow/132762224.cms?from=mdr" target="_blank" rel="noreferrer">The Economic Times</a>
+              </article>
+
+              <article class="stat">
+                <div>
+                  <div class="stat-value">$900k</div>
+                  <p>Combined Rockefeller Foundation and Meta funding for Sylvera's open Atlantic Forest carbon dataset.</p>
+                </div>
+                <a href="https://www.rockefellerfoundation.org/news/sylvera-launches-open-carbon-data-project-investment-brazilian-atlantic-forest-rockefeller-foundation-and-meta/" target="_blank" rel="noreferrer">The Rockefeller Foundation</a>
+              </article>
+
+              <article class="stat">
+                <div>
+                  <div class="stat-value">1,000+ species</div>
+                  <p>Introduced plant-species dataset used in the machine-learning invasion-risk framework.</p>
+                </div>
+                <a href="https://appliedecologistsblog.com/2026/07/30/using-machine-learning-to-predict-invasion-success/" target="_blank" rel="noreferrer">The Applied Ecologist</a>
+              </article>
+
+              <article class="stat">
+                <div>
+                  <div class="stat-value">21 August 2026</div>
+                  <p>Last date for online applications to ISRO NRSC temporary research-personnel recruitment.</p>
+                </div>
+                <a href="https://www.isro.gov.in/NRSCRecruitment2026_1.html" target="_blank" rel="noreferrer">ISRO</a>
+              </article>
+      </div>
+    </section>
+
+    <section class="field-note">
+      <p class="eyebrow">Field Note</p>
+      <h2>Sandalwood & Agroforestry Corner</h2>
+      <p>For sandalwood growers in Karnataka, this week is a good time to audit host plants before the next heavy rain spell rather than only checking the sandalwood stems. A weak host plant quietly changes water sharing, shade, nutrient cycling, and early stress signals around the sandalwood root zone. Walk the block after rain and mark host gaps, waterlogged host basins, pest-hit hosts, and places where the host is outgrowing or shading the sandalwood too aggressively.</p>
+<p>Do one simple correction pass before adding more inputs. Clear blocked drainage around stressed pairs, prune only the host branches that are suppressing airflow or light, and replace missing hosts in patches where sandalwood is exposed to heat or wind. The useful record is pair-wise: sandalwood condition, host condition, soil moisture, and one photo from the same angle. That gives an adviser enough context to separate a nutrient problem from a water, host, or micro-site problem.</p>
+    </section>
+
+    <footer>
+      From lab papers to farm gates, I read the signals so you can act on them. I look for items that can help a grower, student, researcher, or forest team make a better decision this week. Some stories are big research updates; others are small clues from the field that are easy to miss. If something is missing from this briefing, just reply.
+    </footer>
+  </main>
+</body>
+</html>
